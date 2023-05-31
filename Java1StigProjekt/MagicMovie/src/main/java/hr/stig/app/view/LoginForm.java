@@ -2,19 +2,16 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
  */
-package hr.stig.app.login;
+package hr.stig.app.view;
 
-import hr.stig.app.view.MainAplikacija;
 import hr.stig.dal.Repository;
 import static hr.stig.dal.RepositoryFactory.getRepository;
-import hr.stig.dal.sql.SqlRepository;
-import hr.stig.models.Login;
-import java.io.IOException;
-import java.util.ArrayList;
+import static hr.stig.util.validations.Authentication.loginValid;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.JTextField;
+import javax.swing.JLabel;
 
 /**
  *
@@ -22,13 +19,16 @@ import javax.swing.JTextField;
  */
 public class LoginForm extends javax.swing.JFrame {
 
-    private Repository repo = getRepository();
+    private List<JLabel> errorList;
+    private Repository repository;
 
     /**
      * Creates new form LoginForm
      */
     public LoginForm() {
         initComponents();
+        initRepository();
+        initValidations();
         hideErrors();
     }
 
@@ -43,19 +43,20 @@ public class LoginForm extends javax.swing.JFrame {
 
         jLabel1 = new javax.swing.JLabel();
         tfUsername = new javax.swing.JTextField();
-        tfPassword = new javax.swing.JTextField();
         jLabel3 = new javax.swing.JLabel();
         jLabel2 = new javax.swing.JLabel();
         btnEnter = new javax.swing.JButton();
         btnExit = new javax.swing.JButton();
         lbUsernameError = new javax.swing.JLabel();
         lbPasswordError = new javax.swing.JLabel();
+        pfPassword = new javax.swing.JPasswordField();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setTitle("Login");
 
         jLabel1.setText("Password:");
 
-        jLabel3.setText("Magic movie aplikacija");
+        jLabel3.setText("Magic movie application");
 
         jLabel2.setText("Username:");
 
@@ -87,13 +88,12 @@ public class LoginForm extends javax.swing.JFrame {
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
                         .addGap(97, 97, 97)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                            .addComponent(tfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, 189, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                .addComponent(tfUsername, javax.swing.GroupLayout.PREFERRED_SIZE, 191, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGroup(layout.createSequentialGroup()
-                                    .addGap(60, 60, 60)
-                                    .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 67, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(tfUsername, javax.swing.GroupLayout.DEFAULT_SIZE, 191, Short.MAX_VALUE)
+                            .addGroup(layout.createSequentialGroup()
+                                .addGap(60, 60, 60)
+                                .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 67, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(pfPassword))
                         .addGap(18, 18, 18)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(lbUsernameError, javax.swing.GroupLayout.PREFERRED_SIZE, 17, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -127,9 +127,9 @@ public class LoginForm extends javax.swing.JFrame {
                 .addGap(29, 29, 29)
                 .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lbPasswordError, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(tfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(pfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 39, Short.MAX_VALUE)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnExit)
@@ -138,6 +138,7 @@ public class LoginForm extends javax.swing.JFrame {
         );
 
         pack();
+        setLocationRelativeTo(null);
     }// </editor-fold>//GEN-END:initComponents
 
     private void btnExitActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnExitActionPerformed
@@ -146,7 +147,10 @@ public class LoginForm extends javax.swing.JFrame {
 
     private void btnEnterActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnEnterActionPerformed
         try {
-            if (loginValid()) {
+            String username = tfUsername.getText().trim();
+            char[] passArray = (pfPassword.getPassword());
+            String password = String.valueOf(passArray);
+            if (loginValid( repository.getAccounts(), username, password)) {
                 this.dispose();
                 MainAplikacija ma = new MainAplikacija();
                 ma.setVisible(true);
@@ -230,28 +234,27 @@ public class LoginForm extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel lbPasswordError;
     private javax.swing.JLabel lbUsernameError;
-    private javax.swing.JTextField tfPassword;
+    private javax.swing.JPasswordField pfPassword;
     private javax.swing.JTextField tfUsername;
     // End of variables declaration//GEN-END:variables
 
     private void hideErrors() {
-        lbUsernameError.setVisible(false);
-        lbPasswordError.setVisible(false);
+        errorList.forEach(l -> l.setVisible(false));
+    }
+
+    private void initValidations() {
+        errorList = Arrays.asList(
+                lbUsernameError,
+                lbPasswordError
+        );
     }
 
     private void showErrors() {
-        lbUsernameError.setVisible(true);
-        lbPasswordError.setVisible(true);
+        errorList.forEach(l -> l.setVisible(true));
     }
 
-    private boolean loginValid() throws Exception {
-
-        List<Login> accounts = repo.getAccounts();
-        for (Login acc : accounts) {
-            if (acc.getUsername().equals(tfUsername.getText().trim()) && acc.getPassword().equals(tfPassword.getText().trim())) {
-                return true;
-            }
-        }
-        return false;
+    private void initRepository() {
+        repository = getRepository();
     }
+
 }

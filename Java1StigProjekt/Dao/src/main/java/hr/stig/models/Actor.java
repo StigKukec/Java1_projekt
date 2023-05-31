@@ -8,11 +8,21 @@ package hr.stig.models;
  *
  * @author natio
  */
-public class Actor extends Person{
+public class Actor extends Person {
+
     private int idActor;
-    public Actor(int idActor,String firstName, String lastName) {
-        super(firstName, lastName);
+
+    public int getIdActor() {
+        return idActor;
+    }
+
+    public Actor(int idActor, String firstName, String lastName) {
+        this(firstName, lastName);
         this.idActor = idActor;
     }
-    
+
+    public Actor(String firstName, String lastName) {
+        super(firstName, lastName);
+    }
+
 }

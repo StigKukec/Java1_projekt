@@ -17,9 +17,22 @@ public class Movie {
     private int duration;
     private int year;
     private String poster;
+    private String actors;
+    private String directors;
+
+    public Movie( String title, Genre genre, String description, int duration, int year, String actors, String directors, String poster) {
+        this( title, genre, description, duration, year, poster);
+        this.actors = actors;
+        this.directors = directors;
+    }
 
     public Movie(int id, String title, Genre genre, String description, int duration, int year, String poster) {
+        this(title, genre, description, duration, year, poster);
         this.id = id;
+
+    }
+
+    public Movie(String title, Genre genre, String description, int duration, int year, String poster) {
         this.title = title;
         this.description = description;
         this.genre = genre;
@@ -27,7 +40,7 @@ public class Movie {
         this.year = year;
         this.poster = poster;
     }
-    
+
     @Override
     public int hashCode() {
         int hash = 3;
@@ -77,5 +90,14 @@ public class Movie {
     public int getYear() {
         return year;
     }
+
+    public String getActors() {
+        return actors;
+    }
+
+    public String getDirectors() {
+        return directors;
+    }
     
+
 }

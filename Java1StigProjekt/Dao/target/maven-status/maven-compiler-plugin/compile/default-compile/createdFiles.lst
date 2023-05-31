@@ -1,12 +1,11 @@
 hr\stig\models\Director.class
 hr\stig\dal\Repository.class
-hr\stig\models\Genre.class
 hr\stig\dal\sql\DataSourceSingleton.class
+hr\stig\models\Person.class
+hr\stig\models\User.class
+hr\stig\models\Genre.class
 hr\stig\models\Login.class
 hr\stig\models\Movie.class
 hr\stig\models\Actor.class
-hr\stig\models\Film.class
-hr\stig\models\Person.class
-hr\stig\models\User.class
 hr\stig\models\Administrator.class
 hr\stig\dal\sql\SqlRepository.class

@@ -9,8 +9,13 @@ package hr.stig.models;
  * @author natio
  */
 public abstract class Person {
-    private  String firstName;
-    private  String lastName;
+
+    private String firstName;
+    private String lastName;
+
+    private Person() {
+        throw new RuntimeException();
+    }
 
     public Person(String firstName, String lastName) {
         this.firstName = firstName;
@@ -24,5 +29,5 @@ public abstract class Person {
     public String getLastName() {
         return lastName;
     }
-    
+
 }
