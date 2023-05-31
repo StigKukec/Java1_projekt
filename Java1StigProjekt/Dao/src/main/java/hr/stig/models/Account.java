@@ -4,34 +4,37 @@
  */
 package hr.stig.models;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 /**
  *
  * @author natio
  */
-public class Login {
+public class Account {
 
-    private static final String DIR = "C:\\Users\\natio\\OneDrive\\Dokumenti\\Stig_Kukec_Algebra\\Java1\\Projekti\\Administratori.txt";
-
-    public Login() {
-    }
+    //private static final String DIR = "C:\\Users\\natio\\OneDrive\\Dokumenti\\Stig_Kukec_Algebra\\Java1\\Projekti\\Administratori.txt";
 
     private int idAccount;
     private String username;
     private String password;
+    private UserType userType;
     private boolean administrator;
 
-    public Login(int idAccount, String username, String password, boolean administrator) {
+    public Account(int idAccount, String username, String password, UserType userType) {
+        this( username,  password, userType);
+        this.idAccount = idAccount;
+    }
+
+    public Account(int idAccount, String username, String password, boolean administrator) {
         this.idAccount = idAccount;
         this.username = username;
         this.password = password;
         this.administrator = administrator;
+    }
+     public Account(String username, String password, UserType userType) {
+        this.username = username;
+        this.password = password;
+        this.userType = userType;
     }
 
     @Override
@@ -52,8 +55,12 @@ public class Login {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final Login other = (Login) obj;
+        final Account other = (Account) obj;
         return Objects.equals(this.username, other.username);
+    }
+
+    public int getIdAccount() {
+        return idAccount;
     }
 
     public String getUsername() {
@@ -62,6 +69,14 @@ public class Login {
 
     public String getPassword() {
         return password;
+    }
+
+    public UserType getUserType() {
+        return userType;
+    }
+
+    public boolean isAdministrator() {
+        return administrator;
     }
     /*
     public List<Login> ParseFormFileLine() throws IOException {
@@ -78,4 +93,5 @@ public class Login {
 
     }
      */
+
 }

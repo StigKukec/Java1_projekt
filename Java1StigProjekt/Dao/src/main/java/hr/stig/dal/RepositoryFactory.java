@@ -13,11 +13,12 @@ import hr.stig.dal.sql.SqlRepository;
  */
 public class RepositoryFactory {
 
-    private static Repository instance = new SqlRepository();
+    private static Repository instance;
     private RepositoryFactory() {
+        throw new RuntimeException();
     }
     
-    public static Repository getRepository(){
+    public static Repository getRepository() {
         if (instance == null) {
             instance =  new SqlRepository();
         }

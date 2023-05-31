@@ -8,13 +8,15 @@ import hr.stig.dal.Repository;
 import hr.stig.models.Actor;
 import hr.stig.models.Director;
 import hr.stig.models.Genre;
-import hr.stig.models.Login;
+import hr.stig.models.Account;
 import hr.stig.models.Movie;
+import hr.stig.models.UserType;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import javax.sql.DataSource;
 
 /**
@@ -23,7 +25,7 @@ import javax.sql.DataSource;
  */
 public class SqlRepository implements Repository {
 
-    private static final String ID_ACCOUNTS = "IDAccounts";
+    private static final String ID_ACCOUNT = "IDAccount";
     private static final String USERNAME = "Username";
     private static final String PASSWORD = "Password";
     private static final String ADMINISTRATOR = "Administrator";
@@ -33,6 +35,8 @@ public class SqlRepository implements Repository {
     private static final String RELEASEYEAR = "ReleaseYear";
     private static final String DURATION = "Duration";
     private static final String MOVIEDESCRIPTION = "MovieDescription";
+    private static final String ACTOR = "Actors";
+    private static final String DIRECTOR = "Directors";
     private static final String POSTER = "Poster";
     private static final String ID_ACTOR = "IDActor";
     private static final String ID_DIRECTOR = "IDMovieDirector";
@@ -41,58 +45,67 @@ public class SqlRepository implements Repository {
 
     private static final String CREATE_MOVIE = "{CALL createMovie (?,?,?,?,?,?) }";
     private static final String CREATE_ACTOR = "{CALL createActor (?,?) }";
-    private static final String CREATE_DIRECTOR = "{CALL createMoviedDirector (?,?) }";
-    private static final String UPDATE_MOVIE = "";
-    private static final String UPDATE_ACTOR = "";
-    private static final String UPDATE_DIRECTOR = "";
-    private static final String DELETE_MOVIE = "";
-    private static final String DELETE_ACTOR = "";
-    private static final String DELETE_DIRECTOR = "";
-    private static final String SELECT_MOVIE = "";
-    private static final String SELECT_ACTOR = "";
-    private static final String SELECT_DIRECTOR = "";
+    private static final String CREATE_DIRECTOR = "{CALL createMovieDirector (?,?) }";
+    private static final String CREATE_ACCOUNT = "{CALL createAccount (?,?,?) }";
+    private static final String UPDATE_MOVIE = "{CALL updateMovie (?,?,?,?,?,?,?) }";
+    private static final String UPDATE_ACTOR = "{CALL updateActor (?,?,?) }";
+    private static final String UPDATE_DIRECTOR = "{CALL updateMovieDirector (?,?,?) }";
+    private static final String UPDATE_ACCOUNT = "{CALL updateAccount (?,?,?,?) }";
+    private static final String DELETE_MOVIE = "{CALL deleteMovie (?) }";
+    private static final String DELETE_ACTOR = "{CALL deleteActor (?) }";
+    private static final String DELETE_DIRECTOR = "{CALL deleteMovieDirector (?) }";
+    private static final String DELETE_ACCOUNT = "{CALL deleteAccount (?) }";
+    private static final String SELECT_MOVIE = "{CALL selectMovie (?) }";
+    private static final String SELECT_ACTOR = "{CALL selectActor (?) }";
+    private static final String SELECT_DIRECTOR = "{CALL selectMovieDirector (?) }";
+    private static final String SELECT_ACCOUNT = "{CALL selectAccount (?) }";
+    private static final String SELECT_MOVIES = "{CALL selectMovies  }";
+    private static final String SELECT_FULL_MOVIE_STATISTIC = "{CALL selectFullMovieStatistic  }";
+    private static final String SELECT_ACTORS = "{CALL selectActors  }";
+    private static final String SELECT_DIRECTORS = "{CALL selectMovieDirectors  }";
+    private static final String SELECT_ACCOUNTS = "{ CALL selectAccounts }";
 
     @Override
-    public int createMovie(Movie movie) throws Exception {
+    public void createMovie(Movie movie) throws Exception {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(CREATE_MOVIE);) {
             stmt.setString(TITLE, movie.getTitle());
-            stmt.setString(GENRE, movie.getGenre().getGenre());
-            stmt.setInt(RELEASEYEAR, movie.getYear());
-            stmt.setInt(DURATION, movie.getDuration());
             stmt.setString(MOVIEDESCRIPTION, movie.getDescription());
+            stmt.setString(GENRE, movie.getGenre().getGenre());
+            stmt.setInt(DURATION, movie.getDuration());
+            stmt.setInt(RELEASEYEAR, movie.getYear());
             stmt.setString(POSTER, movie.getPoster());
 
             stmt.executeUpdate();
 
-            return stmt.getInt(ID_MOVIE);
+            //return stmt.getInt(ID_MOVIE);
         }
     }
 
     @Override
-    public int createActor(Actor actor) throws Exception {
+    public void createActor(Actor actor) throws Exception {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(CREATE_ACTOR);) {
             stmt.setString(FIRSTNAME, actor.getFirstName());
-            stmt.setString(FIRSTNAME, actor.getLastName());
+            stmt.setString(LASTNAME, actor.getLastName());
 
             stmt.executeUpdate();
 
-            return stmt.getInt(ID_ACTOR);
+            //return stmt.getInt(ID_ACTOR);
         }
 
     }
 
     @Override
-    public int createDirector(Director director) throws Exception {
+    public void createDirector(Director director) throws Exception {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(CREATE_DIRECTOR);) {
             stmt.setString(FIRSTNAME, director.getFirstName());
-            stmt.setString(FIRSTNAME, director.getLastName());
+            stmt.setString(LASTNAME, director.getLastName());
 
             stmt.executeUpdate();
 
-            return stmt.getInt(ID_DIRECTOR);
+            // return stmt.getInt(ID_DIRECTOR);
         }
     }
 
@@ -116,7 +129,7 @@ public class SqlRepository implements Repository {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(UPDATE_ACTOR);) {
             stmt.setString(FIRSTNAME, actor.getFirstName());
-            stmt.setString(FIRSTNAME, actor.getLastName());
+            stmt.setString(LASTNAME, actor.getLastName());
             stmt.setInt(ID_ACTOR, id);
 
             stmt.executeUpdate();
@@ -129,7 +142,7 @@ public class SqlRepository implements Repository {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(UPDATE_DIRECTOR);) {
             stmt.setString(FIRSTNAME, director.getFirstName());
-            stmt.setString(FIRSTNAME, director.getLastName());
+            stmt.setString(LASTNAME, director.getLastName());
             stmt.setInt(ID_DIRECTOR, id);
 
             stmt.executeUpdate();
@@ -170,14 +183,14 @@ public class SqlRepository implements Repository {
     }
 
     @Override
-    public Movie selectMovie(int id) throws Exception {
+    public Optional selectMovie(int id) throws Exception {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_MOVIE);) {
             stmt.setInt(ID_MOVIE, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new Movie(
+                    return Optional.of(new Movie(
                             rs.getInt(ID_MOVIE),
                             rs.getString(TITLE),
                             Genre.from(rs.getString(GENRE)),
@@ -185,56 +198,56 @@ public class SqlRepository implements Repository {
                             rs.getInt(DURATION),
                             rs.getInt(RELEASEYEAR),
                             rs.getString(POSTER)
-                    );
+                    ));
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override
-    public Actor selectActor(int id) throws Exception {
+    public Optional selectActor(int id) throws Exception {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_ACTOR);) {
             stmt.setInt(ID_ACTOR, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new Actor(
+                    return Optional.of(new Actor(
                             rs.getInt(ID_ACTOR),
                             rs.getString(FIRSTNAME),
                             rs.getString(LASTNAME)
-                    );
+                    ));
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override
-    public Director selectDirector(int id) throws Exception {
+    public Optional selectDirector(int id) throws Exception {
         DataSource dataSource = DataSourceSingleton.getInstance();
         try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_DIRECTOR);) {
             stmt.setInt(ID_DIRECTOR, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new Director(
+                    return Optional.of(new Director(
                             rs.getInt(ID_DIRECTOR),
                             rs.getString(FIRSTNAME),
                             rs.getString(LASTNAME)
-                    );
+                    ));
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override
     public List<Movie> selectMovies() throws Exception {
         List<Movie> movies = new ArrayList<>();
         DataSource dataSource = DataSourceSingleton.getInstance();
-        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_MOVIE); ResultSet rs = stmt.executeQuery();) {
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_MOVIES); ResultSet rs = stmt.executeQuery();) {
             while (rs.next()) {
                 movies.add(new Movie(
                         rs.getInt(ID_MOVIE),
@@ -251,10 +264,32 @@ public class SqlRepository implements Repository {
     }
 
     @Override
+    public List<Movie> selectAllMovies() throws Exception {
+        List<Movie> allMovies = new ArrayList<>();
+        DataSource dataSource = DataSourceSingleton.getInstance();
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_FULL_MOVIE_STATISTIC); ResultSet rs = stmt.executeQuery();) {
+            while (rs.next()) {
+                allMovies.add(new Movie(
+                        rs.getString(TITLE),
+                        Genre.from(rs.getString(GENRE)),
+                        rs.getString(MOVIEDESCRIPTION),
+                        rs.getInt(DURATION),
+                        rs.getInt(RELEASEYEAR),
+                        rs.getString(ACTOR),
+                        rs.getString(DIRECTOR),
+                        rs.getString(POSTER))
+                );
+            }
+        }
+
+        return allMovies;
+    }
+
+    @Override
     public List<Actor> selectActors() throws Exception {
         List<Actor> actors = new ArrayList<>();
         DataSource dataSource = DataSourceSingleton.getInstance();
-        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_ACTOR); ResultSet rs = stmt.executeQuery();) {
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_ACTORS); ResultSet rs = stmt.executeQuery();) {
             while (rs.next()) {
                 actors.add(new Actor(
                         rs.getInt(ID_ACTOR),
@@ -270,7 +305,7 @@ public class SqlRepository implements Repository {
     public List<Director> selectDirectors() throws Exception {
         List<Director> directors = new ArrayList<>();
         DataSource dataSource = DataSourceSingleton.getInstance();
-        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_DIRECTOR); ResultSet rs = stmt.executeQuery();) {
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_DIRECTORS); ResultSet rs = stmt.executeQuery();) {
             while (rs.next()) {
                 directors.add(new Director(
                         rs.getInt(ID_DIRECTOR),
@@ -283,22 +318,78 @@ public class SqlRepository implements Repository {
     }
 
     @Override
-    public List<Login> getAccounts() throws Exception {
-        List<Login> accounts = new ArrayList<>();
-            DataSource dataSource = DataSourceSingleton.getInstance();
-        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_DIRECTOR);) {
-            try (ResultSet rs = stmt.executeQuery()) {
-                 while (rs.next()) {
-                    accounts.add( new Login(
-                            rs.getInt(ID_ACCOUNTS),
+    public List<Account> getAccounts() throws Exception {
+        List<Account> accounts = new ArrayList<>();
+        DataSource dataSource = DataSourceSingleton.getInstance();
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_ACCOUNTS); ResultSet rs = stmt.executeQuery();) {
+            while (rs.next()) {
+                accounts.add(new Account(
+                        rs.getInt(ID_ACCOUNT),
+                        rs.getString(USERNAME),
+                        rs.getString(PASSWORD),
+                        rs.getBoolean(ADMINISTRATOR)
+                ));
+            }
+        }
+        return accounts;
+    }
+
+    @Override
+    public void createAccount(Account account) throws Exception {
+        DataSource dataSource = DataSourceSingleton.getInstance();
+
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(CREATE_ACCOUNT);) {
+            stmt.setString(USERNAME, account.getUsername());
+            stmt.setString(PASSWORD, account.getPassword());
+            stmt.setInt(ADMINISTRATOR, account.getUserType().getUserType());
+
+            stmt.executeUpdate();
+        }
+    }
+
+    @Override
+    public void updateAccount(int id, Account account) throws Exception {
+        DataSource dataSource = DataSourceSingleton.getInstance();
+
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(UPDATE_ACCOUNT);) {
+            stmt.setInt(ID_ACCOUNT, id);
+            stmt.setString(USERNAME, account.getUsername());
+            stmt.setString(PASSWORD, account.getPassword());
+            stmt.setInt(ADMINISTRATOR, account.getUserType().getUserType());
+
+            stmt.executeUpdate();
+        }
+
+    }
+
+    @Override
+    public void deleteAccount(int id) throws Exception {
+        DataSource dataSource = DataSourceSingleton.getInstance();
+
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(DELETE_ACCOUNT);) {
+            stmt.setInt(ID_ACCOUNT, id);
+
+            stmt.executeUpdate();
+        }
+    }
+
+    @Override
+    public Optional selectAccount(int id) throws Exception {
+        DataSource dataSource = DataSourceSingleton.getInstance();
+
+        try (Connection sqlConnection = dataSource.getConnection(); CallableStatement stmt = sqlConnection.prepareCall(SELECT_ACCOUNT);) {
+            stmt.setInt(ID_ACCOUNT, id);
+            try (ResultSet rs = stmt.executeQuery();) {
+                if (rs.next()) {
+                    return Optional.of(new Account(
+                            rs.getInt(ID_ACCOUNT),
                             rs.getString(USERNAME),
                             rs.getString(PASSWORD),
-                            rs.getBoolean(ADMINISTRATOR)
-                    ));
+                            UserType.from(rs.getInt(ADMINISTRATOR))));
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
 }

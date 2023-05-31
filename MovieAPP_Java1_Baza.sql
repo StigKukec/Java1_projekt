@@ -4,9 +4,9 @@ go
 use Auth
 go
 
-create table Accounts
+create table Account
 (
-	IDAccounts int primary key identity,
+	IDAccount int primary key identity,
 	Username nvarchar(50),
 	Password nvarchar(50),
 	AccountType nvarchar(15)
@@ -18,16 +18,13 @@ create database MovieAPP
 go
 use MovieAPP
 go
-create table Accounts
+create table Account
 (
-	IDAccounts int primary key identity,
+	IDAccount int primary key identity,
 	Username nvarchar(50),
 	[Password] nvarchar(50),
 	Administrator tinyint ,
-	[User] tinyint,
 	constraint chk_Administrator check (Administrator in(0,1)),
-	constraint chk_User check ([User] in(0,1))
-
 )
 
 go
@@ -148,13 +145,31 @@ delete from Movie_Actor where MovieID = (select IDMovie from Movie where Title =
 delete from Movie where Title = @Title	and ReleaseYear = @ReleaseYear
 
 go
-create proc deleteMovieById
+create proc deleteMovie
 (
-@MovieID int 
+@IDMovie int 
 )
 as
-delete from Movie_Actor where (select IDMovie from Movie) = @MovieID 
-delete from Movie where IDMovie = @MovieID
+delete from Movie_Actor where MovieID = @IDMovie 
+delete from Movie_MovieDirector where MovieID = @IDMovie  
+delete from Movie where IDMovie = @IDMovie
+go
+create proc deleteActor
+(
+@IDActor int 
+)
+as
+delete from Movie_Actor where ActorID = @IDActor 
+delete from Actor where IDActor = @IDActor
+
+go
+create proc deleteMovieDirector
+(
+@IDMovieDirector int 
+)
+as
+delete from Movie_MovieDirector where MovieDirectorID = @IDMovieDirector 
+delete from MovieDirector where IDMovieDirector = @IDMovieDirector
 
 go
 create proc deleteMovieDirectorByName
@@ -197,42 +212,87 @@ as
 delete from Movie_Actor where ActorID = (select IDActor from Actor where  FirstName = @FirstName and LastName = @LastName)
 and MovieID = (select IDMovie from Movie where Title = @Title)
 go
+------------------------
+--update
+create proc updateMovie 
+(
+@IDMovie int,
+@Title nvarchar(50) ,
+@Genre nvarchar(50) ,
+@ReleaseYear int ,
+@Duration int ,
+@MovieDescription nvarchar(50) ,
+@Poster nvarchar(300))
+as
+update Movie
+set Title = @Title, Genre = @Genre,ReleaseYear = @ReleaseYear,Duration = @Duration, MovieDescription = @MovieDescription, Poster = @Poster
+where IDMovie = @IDMovie
+go
+create proc updateActor
+(
+@IDActor int,
+@FirstName nvarchar(50),
+@LastName nvarchar(50))
+as
+update Actor
+set FirstName = @FirstName, LastName = @LastName
+where IDActor = @IDActor
+go
+create proc updateMovieDirector
+(
+@IDMovieDirector int,
+@FirstName nvarchar(50),
+@LastName nvarchar(50))
+as
+update MovieDirector
+set FirstName = @FirstName, LastName = @LastName
+where IDMovieDirector = @IDMovieDirector
+go
+
 -----------------------------------
 --select
 create proc selectMovie
 (
-@Title nvarchar(50),
-@ReleaseYear nvarchar(50)
+@IDMovie int
 )
 as
-select * from Movie where Title = @Title and ReleaseYear = @ReleaseYear
+select * from Movie where IDMovie = @IDMovie
 
 go
+create proc selectMovies
+as
+select * from Movie 
 
+go
+create proc selectActors
+as
+select * from Actor 
+go
+create proc selectMovieDirectors
+as
+select * from MovieDirector
+go
 create proc selectActor
 (
-@FirstName nvarchar(50),
-@LastName nvarchar(50)
+@IDActor int
+
 )
 as
-select * from Actor where FirstName = @FirstName and LastName = @LastName
+select * from Actor where IDActor = @IDActor
 go
 
 create proc selectMovieDirector
 (
-@FirstName nvarchar(50),
-@LastName nvarchar(50)
+@IDMovieDirector int
 )
 as
-select * from MovieDirector where FirstName = @FirstName and LastName = @LastName
+select * from MovieDirector where IDMovieDirector = @IDMovieDirector
+
 
 go
 
 create proc selectFullMovieStatistic
-(
-@Title nvarchar(50),
-@ReleaseYear nvarchar(50)
-)
+
 as
 BEGIN
     SELECT m.Title, m.Genre, m.Duration, m.MovieDescription, m.ReleaseYear,
@@ -248,47 +308,79 @@ BEGIN
                FOR XML PATH('')), 1, 2, '') AS Directors,
         m.Poster
     FROM Movie AS m
-    WHERE m.Title = @Title AND m.ReleaseYear = @ReleaseYear
 END
 
 
+---------------------------------------------------------------------
+--Account procedures
+go
+create proc createAccount
+(
+@Username nvarchar(75),
+@Password nvarchar(50),
+@Administrator tinyint
+)
+as
+insert into Account(Username,Password,Administrator)values(@Username,@Password,@Administrator)
+go
+create proc updateAccount
+(
+@IDAccount int,
+@Username nvarchar(50),
+@Password nvarchar(50),
+@Administrator tinyint
+)
+as
+update Account
+set Username = @Username, Password = @Password, Administrator = @Administrator
+where IDAccount = @IDAccount
+go
+create proc deleteAccount
+(
+@IDAccount int 
+)
+as
+delete from Account where IDAccount = @IDAccount
+go
+
+create proc selectAccount
+as
+select * from Account 
+go
+
+create proc selectAccount
+(
+@IDAccount int 
+)
+as
+select * from Account where IDAccount = @IDAccount
+go
+
+
+---------------------------------------------------------------------
+
 /*
-
-exec createMovie 'Star Wars','fikcija',2003,230,'najbolji film ikada',null
-go
-exec createMovie 'Katarina','komedija',1234,100,'peder',null
-go
-exec createActor 'Milica','Drago'
-go
-exec createActor 'Baka','Kaka'
-
-exec createMovieDirector'vvvvvvvvv','zzzzzzzzzzzzz'
-
-go
-exec insertActorInMovie 4,2
-go
-exec insertActorInMovie 4,4
-go
-exec insertActorInMovie 4,3
-go
-exec insertActorInMovie 5,5
 select * from Movie
+
 select * from Actor
-select * from Movie_Actor
+
 select * from MovieDirector
 
-delete from Movie where IDMovie = 2
-delete from Actor where IDActor = 1
+select * from Movie_Actor
 
-delete from Movie_Actor where MovieID = (select IDMovie from Movie where Title = 'Matrix'	and ReleaseYear = 2002) 
-delete from Movie_Actor 
+select * from Movie_MovieDirector
 
-exec selectFullMovieStatistic 'Star Wars',2003
+select * from Accounts
 
-exec insertDirectorInMovie 4,1
-go
-exec insertDirectorInMovie 4,2
-go
-exec insertDirectorInMovie 5,1
+delete from Movie
+
+delete from Actor
+
+delete from MovieDirector
+
+delete from Movie_Actor
+
+delete from Movie_MovieDirector
+
+delete from Accounts
 */
-
