@@ -17,20 +17,19 @@ import java.util.Optional;
  */
 public interface Repository {
 
-    /*
-    int createMovie(Movie movie) throws Exception;
-
-    int createActor(Actor actor) throws Exception;
-
-    int createDirector(Director director) throws Exception;
-     */
     void createMovie(Movie movie) throws Exception;
 
     void createActor(Actor actor) throws Exception;
 
+    void insertActorInMovie(Movie movie, Actor actor) throws Exception;
+
     void createDirector(Director director) throws Exception;
 
+    void insertDirectorInMovie(Movie movie, Director director) throws Exception;
+
     void createAccount(Account account) throws Exception;
+
+    void uploadMovies(Movie movie) throws Exception;
 
     void updateMovie(int id, Movie movie) throws Exception;
 
@@ -47,6 +46,12 @@ public interface Repository {
     void deleteDirector(int id) throws Exception;
 
     void deleteAccount(int id) throws Exception;
+
+    void deleteAllMovies() throws Exception;
+
+    void deleteAllActors() throws Exception;
+
+    void deleteAllMovieDirectors() throws Exception;
 
     Optional selectMovie(int id) throws Exception;
 

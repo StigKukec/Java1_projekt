@@ -30,5 +30,5 @@ public enum UserType {
         }
         throw new RuntimeException("Wrong user type");
     }
-    
+
 }

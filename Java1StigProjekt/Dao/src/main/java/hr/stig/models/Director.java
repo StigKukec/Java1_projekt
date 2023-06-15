@@ -8,12 +8,16 @@ package hr.stig.models;
  *
  * @author natio
  */
-public class Director extends Person{
+public class Director extends Person {
 
     private int idDirector;
 
     public int getIdDirector() {
         return idDirector;
+    }
+
+    public Director() {
+
     }
 
     public Director(int idDirector, String firstName, String lastName) {

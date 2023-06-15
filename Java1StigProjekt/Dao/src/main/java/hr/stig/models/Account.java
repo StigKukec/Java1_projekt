@@ -12,8 +12,6 @@ import java.util.Objects;
  */
 public class Account {
 
-    //private static final String DIR = "C:\\Users\\natio\\OneDrive\\Dokumenti\\Stig_Kukec_Algebra\\Java1\\Projekti\\Administratori.txt";
-
     private int idAccount;
     private String username;
     private String password;
@@ -21,7 +19,7 @@ public class Account {
     private boolean administrator;
 
     public Account(int idAccount, String username, String password, UserType userType) {
-        this( username,  password, userType);
+        this(username, password, userType);
         this.idAccount = idAccount;
     }
 
@@ -31,7 +29,8 @@ public class Account {
         this.password = password;
         this.administrator = administrator;
     }
-     public Account(String username, String password, UserType userType) {
+
+    public Account(String username, String password, UserType userType) {
         this.username = username;
         this.password = password;
         this.userType = userType;
@@ -78,20 +77,5 @@ public class Account {
     public boolean isAdministrator() {
         return administrator;
     }
-    /*
-    public List<Login> ParseFormFileLine() throws IOException {
-        List<Login> l = new ArrayList<Login>();
-        BufferedReader bf = new BufferedReader(new FileReader(DIR));
-        String line;
-        while ((line = bf.readLine()) != null) {
-            String[] details = line.split(",");
-            Login lg = new Login(details[0], details[1]);
-            l.add(lg);
-        }
-        bf.close();
-        return l;
-
-    }
-     */
 
 }

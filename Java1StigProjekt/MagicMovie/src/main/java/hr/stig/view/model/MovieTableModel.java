@@ -55,7 +55,8 @@ public class MovieTableModel extends AbstractTableModel{
             case 2:
                 return movies.get(rowIndex).getDescription();
             case 3:
-                return movies.get(rowIndex).getGenre();
+                return movies.get(rowIndex).getGenres();
+                //return movies.get(rowIndex).getGenre();
             case 4:
                 return movies.get(rowIndex).getDuration();
             case 5:

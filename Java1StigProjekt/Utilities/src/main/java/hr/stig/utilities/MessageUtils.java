@@ -26,12 +26,10 @@ public class MessageUtils {
 
     public static void messageSuccess(String title, String message) {
         JOptionPane.showMessageDialog(null, message, title, JOptionPane.PLAIN_MESSAGE);
-
     }
 
     public static void messageInformation(String title, String message) {
         JOptionPane.showMessageDialog(null, message, title, JOptionPane.INFORMATION_MESSAGE);
-
     }
 
 }

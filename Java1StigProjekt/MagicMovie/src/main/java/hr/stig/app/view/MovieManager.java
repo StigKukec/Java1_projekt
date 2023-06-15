@@ -4,30 +4,40 @@
  */
 package hr.stig.app.view;
 
+import hr.stig.parsers.rss.MovieParser;
 import hr.stig.dal.Repository;
 import static hr.stig.dal.RepositoryFactory.getRepository;
 import hr.stig.models.Account;
 import hr.stig.models.Actor;
-import hr.stig.models.CRUD_Operations;
+import hr.stig.models.ActorTransferable;
 import hr.stig.models.Director;
+import hr.stig.models.DirectorTransferable;
 import hr.stig.models.Genre;
 import hr.stig.models.Movie;
+import hr.stig.models.MovieArchive;
 import hr.stig.models.UserType;
-import hr.stig.util.validations.Authentication;
+import hr.stig.authentication.Authentication;
 import hr.stig.view.model.MovieTableModel;
 import hr.stig.view.model.ActorTableModel;
 import hr.stig.view.model.DirectorTableModel;
 import hr.stig.utilities.FileUtils;
 import hr.stig.utilities.IconUtils;
+import hr.stig.utilities.JAXBUtils;
 import hr.stig.util.validations.EmptyInput;
 import static hr.stig.util.validations.EmptyInput.setEmpty;
 import static hr.stig.util.validations.EmptyInput.valueValid;
+import hr.stig.util.validations.PasswordHashing;
+import static hr.stig.utilities.FileUtils.deleteDirectory;
 import hr.stig.utilities.MessageUtils;
-import hr.stig.view.model.accountTableModel;
-import hr.stig.view.model.allmoviesTableModel;
+import hr.stig.view.model.AccountTableModel;
+import hr.stig.view.model.AllmoviesTableModel;
 import java.awt.Component;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.print.PrinterJob;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import javax.swing.JLabel;
 import java.util.Arrays;
 import java.util.List;
@@ -35,19 +45,35 @@ import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.DefaultListModel;
+import javax.swing.DropMode;
 import javax.swing.ImageIcon;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
 import javax.swing.ListSelectionModel;
+import javax.swing.TransferHandler;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.bind.JAXBException;
 
 /**
  *
  * @author natio
  */
-public class MainAplikacija extends javax.swing.JFrame {
+public class MovieManager extends javax.swing.JFrame {
 
     private List<Component> movieLayout;
     private List<Component> actorLayout;
     private List<Component> directorLayout;
     private List<Component> accountLayout;
+    private List<Movie> moviesFromDB = new ArrayList<>();
+    private List<Actor> actorsFromDB = new ArrayList<>();
+    private List<Director> directorsFromDB = new ArrayList<>();
+    private DefaultListModel<Actor> allActorsModel = new DefaultListModel<>();
+    private DefaultListModel<Director> allDirectorsModel = new DefaultListModel<>();
+    private List<Actor> insertedActors = new ArrayList<>();
+    private List<Director> insertedDirectors = new ArrayList<>();
+    private DefaultListModel<Actor> insertedActorsModel = new DefaultListModel<>();
+    private DefaultListModel<Director> insertedDirectorsModel = new DefaultListModel<>();
     private List<JLabel> movieErrorList;
     private List<JLabel> actorErrorList;
     private List<JLabel> directorErrorList;
@@ -56,41 +82,40 @@ public class MainAplikacija extends javax.swing.JFrame {
     private MovieTableModel movieTableModel;
     private ActorTableModel actorTableModel;
     private DirectorTableModel directorTableModel;
-    private allmoviesTableModel allMoviesTableModel;
-    private accountTableModel accTableModel;
+    private AllmoviesTableModel allMoviesTableModel;
+    private AccountTableModel accTableModel;
     private int selectedMovieId;
     private int selectedActorId;
     private int selectedDirectorId;
     private int selectedAccountId;
-    private ImageIcon defaultPoster = new javax.swing.ImageIcon(getClass().getResource("/assets/GeneralMoviePoster.jpg"));
+    private ImageIcon defaultPoster = new javax.swing.ImageIcon(getClass().getResource("/defaultImages/GeneralMoviePoster.jpg"));
 
+    private static final String FILENAME = "src/main/resources/movie.xml";
     private static final String DESCRIPTION = "Image";
     private static final String[] FILE_EXTENSIONS = {"png", "jpg", "jpeg"};
 
-    /*
-    private static final String MOVIE = "MOVIE";
-    private static final String ACTOR = "ACTOR";
-    private static final String DIRECTOR = "DIRECTOR";
-     */
+    private StringBuilder sb = new StringBuilder();
+    private int genreCounter = 0;
+
     /**
      * Creates new form MainAplikacija
      */
-    public MainAplikacija() {
+    public MovieManager() {
         try {
             initComponents();
             initRepository();
             initComponentLists();
             initTable();
-            //initDefaultComponentValue();
-            initOperations();
             initUserType();
             initGenres();
             hideErrors();
             initUsername();
             initAuthorization();
+            loadAllActorsAndDirectors();
+            initDragNDrop();
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
-            MessageUtils.messageError("Critical error", "Application parts didn't load correctly!");
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+            MessageUtils.messageError("CRITICAL ERROR", "Application parts didn't load correctly!");
             System.exit(1);
         }
     }
@@ -110,8 +135,6 @@ public class MainAplikacija extends javax.swing.JFrame {
         tblAllMovies = new javax.swing.JTable();
         lbSignInView = new javax.swing.JLabel();
         pnlMovie = new javax.swing.JPanel();
-        cbOperation = new javax.swing.JComboBox<>();
-        lbOperation = new javax.swing.JLabel();
         tfMovieTitle = new javax.swing.JTextField();
         lbMovieTitle = new javax.swing.JLabel();
         lbMovieGenre = new javax.swing.JLabel();
@@ -136,6 +159,10 @@ public class MainAplikacija extends javax.swing.JFrame {
         lbMovieTitleError = new javax.swing.JLabel();
         lbMovieDurationError = new javax.swing.JLabel();
         lbMovieDescriptionError = new javax.swing.JLabel();
+        lbSignInViewMovie = new javax.swing.JLabel();
+        tfChoosenGenre = new javax.swing.JTextField();
+        btnClearChosenGenres = new javax.swing.JButton();
+        lbGenreError = new javax.swing.JLabel();
         pnlActor = new javax.swing.JPanel();
         btnAddActor = new javax.swing.JButton();
         btnUpdateActor = new javax.swing.JButton();
@@ -148,6 +175,7 @@ public class MainAplikacija extends javax.swing.JFrame {
         tfLastNameActor = new javax.swing.JTextField();
         lbFirstNameActorError = new javax.swing.JLabel();
         lbLastNameActorError = new javax.swing.JLabel();
+        lbSignInViewActor = new javax.swing.JLabel();
         pnlMovieDirector = new javax.swing.JPanel();
         btnAddDirector = new javax.swing.JButton();
         btnUpdateDirector = new javax.swing.JButton();
@@ -160,11 +188,28 @@ public class MainAplikacija extends javax.swing.JFrame {
         lbLastNameDirectorError = new javax.swing.JLabel();
         jScrollPane6 = new javax.swing.JScrollPane();
         tblDirectors = new javax.swing.JTable();
+        lbSignInViewMovieDirector = new javax.swing.JLabel();
         pnlModelDnDMovie = new javax.swing.JPanel();
+        lbChooseMovie = new javax.swing.JLabel();
+        lbActorsInMovie = new javax.swing.JLabel();
+        cbChooseMovie = new javax.swing.JComboBox<>();
+        lbDirectorsInMovie = new javax.swing.JLabel();
+        jScrollPane7 = new javax.swing.JScrollPane();
+        lstActorsInMovie = new javax.swing.JList<>();
+        jScrollPane8 = new javax.swing.JScrollPane();
+        lstDirectorsInMovie = new javax.swing.JList<>();
+        jScrollPane9 = new javax.swing.JScrollPane();
+        lstAllDirectors = new javax.swing.JList<>();
+        lbAllDirectors = new javax.swing.JLabel();
+        lbAllActors = new javax.swing.JLabel();
+        jScrollPane10 = new javax.swing.JScrollPane();
+        lstAllActors = new javax.swing.JList<>();
+        lbSignInViewDnD = new javax.swing.JLabel();
+        jPanel1 = new javax.swing.JPanel();
         pnlAccountManager = new javax.swing.JPanel();
-        jLabel1 = new javax.swing.JLabel();
-        jLabel2 = new javax.swing.JLabel();
-        jLabel3 = new javax.swing.JLabel();
+        lbPassword = new javax.swing.JLabel();
+        lbUsername = new javax.swing.JLabel();
+        lbAdministrator = new javax.swing.JLabel();
         tfPassword = new javax.swing.JTextField();
         tfUsername = new javax.swing.JTextField();
         jScrollPane5 = new javax.swing.JScrollPane();
@@ -176,10 +221,26 @@ public class MainAplikacija extends javax.swing.JFrame {
         lbPasswordError = new javax.swing.JLabel();
         lbAdministratorError = new javax.swing.JLabel();
         lbUsernameError = new javax.swing.JLabel();
-        jLabel4 = new javax.swing.JLabel();
-        jLabel5 = new javax.swing.JLabel();
+        lbLoadMoviesFromDB = new javax.swing.JLabel();
+        lbDeleteMoviesFromDB = new javax.swing.JLabel();
         btnLoadMovies = new javax.swing.JButton();
         btnDeleteMovies = new javax.swing.JButton();
+        lbSignInViewAccManager = new javax.swing.JLabel();
+        lbXMLDownload = new javax.swing.JLabel();
+        btnSaveMovies = new javax.swing.JButton();
+        jMenuBar1 = new javax.swing.JMenuBar();
+        jmNavigation = new javax.swing.JMenu();
+        miAllMovies = new javax.swing.JMenuItem();
+        miMovie = new javax.swing.JMenuItem();
+        miActor = new javax.swing.JMenuItem();
+        miMovieDirector = new javax.swing.JMenuItem();
+        miModelInsert = new javax.swing.JMenuItem();
+        jmOptions = new javax.swing.JMenu();
+        miExitApp = new javax.swing.JMenuItem();
+        miPrintMovies = new javax.swing.JMenuItem();
+        mnChangeLanguage = new javax.swing.JMenu();
+        miCroatian = new javax.swing.JMenuItem();
+        miEnglish = new javax.swing.JMenuItem();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("MagicMovie");
@@ -203,7 +264,7 @@ public class MainAplikacija extends javax.swing.JFrame {
         pnlAllMovies.setLayout(pnlAllMoviesLayout);
         pnlAllMoviesLayout.setHorizontalGroup(
             pnlAllMoviesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jScrollPane3, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, 899, Short.MAX_VALUE)
+            .addComponent(jScrollPane3, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, 1080, Short.MAX_VALUE)
             .addGroup(pnlAllMoviesLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(lbSignInView, javax.swing.GroupLayout.PREFERRED_SIZE, 246, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -213,21 +274,14 @@ public class MainAplikacija extends javax.swing.JFrame {
             pnlAllMoviesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAllMoviesLayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(lbSignInView, javax.swing.GroupLayout.DEFAULT_SIZE, 29, Short.MAX_VALUE)
+                .addComponent(lbSignInView, javax.swing.GroupLayout.DEFAULT_SIZE, 30, Short.MAX_VALUE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 644, javax.swing.GroupLayout.PREFERRED_SIZE))
         );
 
         tpApplicationView.addTab("All movies", pnlAllMovies);
 
-        cbOperation.setForeground(new java.awt.Color(0, 153, 153));
-        cbOperation.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cbOperationActionPerformed(evt);
-            }
-        });
-
-        lbOperation.setText("Choose CRUD operation ");
+        tfMovieTitle.setName(""); // NOI18N
 
         lbMovieTitle.setText("Movie title");
 
@@ -288,7 +342,14 @@ public class MainAplikacija extends javax.swing.JFrame {
         spMovieYear.setModel(new javax.swing.SpinnerNumberModel(1970, 1970, 2023, 1));
         spMovieYear.setEditor(new javax.swing.JSpinner.NumberEditor(spMovieYear, ""));
 
+        cbGenre.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cbGenreActionPerformed(evt);
+            }
+        });
+
         taMovieDescription.setColumns(20);
+        taMovieDescription.setForeground(new java.awt.Color(0, 0, 0));
         taMovieDescription.setLineWrap(true);
         taMovieDescription.setRows(5);
         taMovieDescription.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
@@ -296,7 +357,7 @@ public class MainAplikacija extends javax.swing.JFrame {
         jScrollPane2.setViewportView(taMovieDescription);
 
         lbPoster.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        lbPoster.setIcon(new javax.swing.ImageIcon(getClass().getResource("/assets/GeneralMoviePoster.jpg"))); // NOI18N
+        lbPoster.setIcon(new javax.swing.ImageIcon(getClass().getResource("/defaultImages/GeneralMoviePoster.jpg"))); // NOI18N
         lbPoster.setNextFocusableComponent(btnChoosePoster);
 
         spMovieDuration.setModel(new javax.swing.SpinnerNumberModel(0, 0, 300, 1));
@@ -322,21 +383,40 @@ public class MainAplikacija extends javax.swing.JFrame {
         lbMovieDescriptionError.setForeground(new java.awt.Color(255, 0, 51));
         lbMovieDescriptionError.setText("X");
 
+        lbSignInViewMovie.setText("Signed in as:");
+
+        tfChoosenGenre.setEditable(false);
+
+        btnClearChosenGenres.setText("Clear");
+        btnClearChosenGenres.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnClearChosenGenresActionPerformed(evt);
+            }
+        });
+
+        lbGenreError.setForeground(new java.awt.Color(255, 0, 0));
+        lbGenreError.setText("X");
+
         javax.swing.GroupLayout pnlMovieLayout = new javax.swing.GroupLayout(pnlMovie);
         pnlMovie.setLayout(pnlMovieLayout);
         pnlMovieLayout.setHorizontalGroup(
             pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addComponent(jScrollPane1)
             .addGroup(pnlMovieLayout.createSequentialGroup()
-                .addGap(22, 22, 22)
+                .addGap(23, 23, 23)
                 .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(pnlMovieLayout.createSequentialGroup()
+                        .addComponent(lbSignInViewMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 256, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(0, 0, Short.MAX_VALUE))
                     .addGroup(pnlMovieLayout.createSequentialGroup()
                         .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(pnlMovieLayout.createSequentialGroup()
-                                .addGap(9, 9, 9)
-                                .addComponent(lbOperation))
-                            .addGroup(pnlMovieLayout.createSequentialGroup()
                                 .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
+                                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                            .addComponent(lbMovieGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                            .addComponent(cbGenre, 0, 153, Short.MAX_VALUE))
+                                        .addGap(48, 48, 48))
                                     .addGroup(pnlMovieLayout.createSequentialGroup()
                                         .addComponent(spMovieDuration, javax.swing.GroupLayout.PREFERRED_SIZE, 149, javax.swing.GroupLayout.PREFERRED_SIZE)
                                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -347,58 +427,90 @@ public class MainAplikacija extends javax.swing.JFrame {
                                         .addComponent(spMovieYear, javax.swing.GroupLayout.PREFERRED_SIZE, 148, javax.swing.GroupLayout.PREFERRED_SIZE)
                                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                                         .addComponent(lbReleaseYearError, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                                .addGap(43, 43, 43)
+                                .addGap(133, 133, 133))
+                            .addGroup(pnlMovieLayout.createSequentialGroup()
+                                .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                                    .addComponent(tfChoosenGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 241, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addGroup(pnlMovieLayout.createSequentialGroup()
+                                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                            .addComponent(lbMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                            .addComponent(tfMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, 192, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                        .addComponent(lbMovieTitleError, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(btnClearChosenGenres, javax.swing.GroupLayout.PREFERRED_SIZE, 63, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(lbGenreError, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
+                                .addGap(0, 0, Short.MAX_VALUE)
+                                .addComponent(btnAddMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(59, 59, 59)))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(pnlMovieLayout.createSequentialGroup()
+                                .addComponent(btnUpdateMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(18, 18, 18)
+                                .addComponent(btnDeleteMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(129, 433, Short.MAX_VALUE))
+                            .addGroup(pnlMovieLayout.createSequentialGroup()
+                                .addGap(0, 75, Short.MAX_VALUE)
                                 .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                     .addGroup(pnlMovieLayout.createSequentialGroup()
-                                        .addComponent(btnAddMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addGap(18, 18, 18)
-                                        .addComponent(btnUpdateMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addGap(18, 18, 18)
-                                        .addComponent(btnDeleteMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                    .addGroup(pnlMovieLayout.createSequentialGroup()
-                                        .addGap(28, 28, 28)
-                                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                            .addGroup(pnlMovieLayout.createSequentialGroup()
-                                                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 290, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                                .addComponent(lbMovieDescriptionError, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                            .addComponent(lbDescription, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE))))))
-                        .addGap(129, 202, Short.MAX_VALUE))
-                    .addGroup(pnlMovieLayout.createSequentialGroup()
-                        .addGap(1, 1, 1)
-                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(lbMovieGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(lbMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(tfMovieTitle)
-                            .addComponent(cbGenre, 0, 192, Short.MAX_VALUE)
-                            .addComponent(cbOperation, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(lbMovieTitleError, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
-                                    .addComponent(btnChoosePoster, javax.swing.GroupLayout.PREFERRED_SIZE, 85, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addGap(128, 128, 128))
-                                .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
-                                    .addComponent(tfPosterPath, javax.swing.GroupLayout.PREFERRED_SIZE, 207, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addGap(60, 60, 60))
-                                .addGroup(pnlMovieLayout.createSequentialGroup()
-                                    .addComponent(lbPoster, javax.swing.GroupLayout.PREFERRED_SIZE, 207, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addContainerGap()))
-                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
-                                .addComponent(lbTitleMoviePoster, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(95, 95, 95))))))
+                                        .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 290, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                        .addComponent(lbMovieDescriptionError, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                    .addComponent(lbDescription, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGap(36, 36, 36)
+                                .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                        .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
+                                            .addComponent(btnChoosePoster, javax.swing.GroupLayout.PREFERRED_SIZE, 85, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                            .addGap(128, 128, 128))
+                                        .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
+                                            .addComponent(tfPosterPath, javax.swing.GroupLayout.PREFERRED_SIZE, 207, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                            .addGap(60, 60, 60))
+                                        .addGroup(pnlMovieLayout.createSequentialGroup()
+                                            .addComponent(lbPoster, javax.swing.GroupLayout.PREFERRED_SIZE, 207, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                            .addContainerGap()))
+                                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieLayout.createSequentialGroup()
+                                        .addComponent(lbTitleMoviePoster, javax.swing.GroupLayout.PREFERRED_SIZE, 118, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addGap(95, 95, 95))))))))
         );
         pnlMovieLayout.setVerticalGroup(
             pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlMovieLayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(lbOperation, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
+                .addComponent(lbSignInViewMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(26, 26, 26)
                 .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlMovieLayout.createSequentialGroup()
-                        .addGap(6, 6, 6)
+                        .addComponent(lbMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(tfMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbMovieTitleError))
+                        .addGap(18, 18, 18)
+                        .addComponent(lbMovieGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(cbGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(tfChoosenGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 29, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(btnClearChosenGenres)
+                            .addComponent(lbGenreError, javax.swing.GroupLayout.PREFERRED_SIZE, 29, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(lbReleaseYear, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(spMovieYear, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbReleaseYearError))
+                        .addGap(18, 18, 18)
+                        .addComponent(lbDuration, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(spMovieDuration, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbMovieDurationError)))
+                    .addGroup(pnlMovieLayout.createSequentialGroup()
                         .addComponent(lbTitleMoviePoster, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(lbPoster, javax.swing.GroupLayout.PREFERRED_SIZE, 173, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -407,45 +519,17 @@ public class MainAplikacija extends javax.swing.JFrame {
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(btnChoosePoster))
                     .addGroup(pnlMovieLayout.createSequentialGroup()
-                        .addComponent(cbOperation, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(24, 24, 24)
-                        .addComponent(lbMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(18, 18, 18)
-                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(tfMovieTitle, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(lbMovieTitleError))
-                        .addGap(38, 38, 38)
-                        .addComponent(lbMovieGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(cbGenre, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(33, 33, 33)
-                        .addComponent(lbReleaseYear, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(spMovieYear, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(lbReleaseYearError)))
-                    .addGroup(pnlMovieLayout.createSequentialGroup()
                         .addComponent(lbDescription, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(18, 18, 18)
                         .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 265, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(lbMovieDescriptionError))))
-                .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(pnlMovieLayout.createSequentialGroup()
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 42, Short.MAX_VALUE)
-                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(btnAddMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(btnUpdateMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(btnDeleteMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addGap(18, 18, 18))
-                    .addGroup(pnlMovieLayout.createSequentialGroup()
-                        .addGap(18, 18, 18)
-                        .addComponent(lbDuration, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(spMovieDuration, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(lbMovieDurationError))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(pnlMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(btnAddMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(btnUpdateMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(btnDeleteMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(18, 18, 18)
                 .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 230, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
         );
@@ -505,13 +589,15 @@ public class MainAplikacija extends javax.swing.JFrame {
         lbLastNameActorError.setForeground(new java.awt.Color(255, 0, 51));
         lbLastNameActorError.setText("X");
 
+        lbSignInViewActor.setText("Signed in as:");
+
         javax.swing.GroupLayout pnlActorLayout = new javax.swing.GroupLayout(pnlActor);
         pnlActor.setLayout(pnlActorLayout);
         pnlActorLayout.setHorizontalGroup(
             pnlActorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addComponent(jScrollPane4)
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlActorLayout.createSequentialGroup()
-                .addContainerGap(138, Short.MAX_VALUE)
+            .addGroup(pnlActorLayout.createSequentialGroup()
+                .addContainerGap(319, Short.MAX_VALUE)
                 .addGroup(pnlActorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlActorLayout.createSequentialGroup()
                         .addGroup(pnlActorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -539,11 +625,17 @@ public class MainAplikacija extends javax.swing.JFrame {
                         .addGap(18, 18, 18)
                         .addComponent(btnDeleteActor, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(226, 226, 226))))
+            .addGroup(pnlActorLayout.createSequentialGroup()
+                .addGap(17, 17, 17)
+                .addComponent(lbSignInViewActor, javax.swing.GroupLayout.PREFERRED_SIZE, 268, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
         );
         pnlActorLayout.setVerticalGroup(
             pnlActorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlActorLayout.createSequentialGroup()
-                .addGap(121, 121, 121)
+                .addGap(18, 18, 18)
+                .addComponent(lbSignInViewActor, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(65, 65, 65)
                 .addGroup(pnlActorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lbLastNameActor, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(lbFirstNameActor, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -553,7 +645,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                     .addComponent(tfLastNameActor, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(lbFirstNameActorError)
                     .addComponent(lbLastNameActorError))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 107, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 108, Short.MAX_VALUE)
                 .addGroup(pnlActorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnAddActor, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btnUpdateActor, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -618,12 +710,14 @@ public class MainAplikacija extends javax.swing.JFrame {
         });
         jScrollPane6.setViewportView(tblDirectors);
 
+        lbSignInViewMovieDirector.setText("Signed in as:");
+
         javax.swing.GroupLayout pnlMovieDirectorLayout = new javax.swing.GroupLayout(pnlMovieDirector);
         pnlMovieDirector.setLayout(pnlMovieDirectorLayout);
         pnlMovieDirectorLayout.setHorizontalGroup(
             pnlMovieDirectorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlMovieDirectorLayout.createSequentialGroup()
-                .addContainerGap(184, Short.MAX_VALUE)
+                .addContainerGap(273, Short.MAX_VALUE)
                 .addGroup(pnlMovieDirectorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieDirectorLayout.createSequentialGroup()
                         .addGap(86, 86, 86)
@@ -632,7 +726,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                     .addComponent(tfFirstNameDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 248, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGroup(pnlMovieDirectorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieDirectorLayout.createSequentialGroup()
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 182, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 274, Short.MAX_VALUE)
                         .addComponent(lbLastNameDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 101, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(44, 44, 44))
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieDirectorLayout.createSequentialGroup()
@@ -644,7 +738,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                 .addComponent(lbLastNameDirectorError, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(97, 97, 97))
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieDirectorLayout.createSequentialGroup()
-                .addContainerGap(259, Short.MAX_VALUE)
+                .addContainerGap(440, Short.MAX_VALUE)
                 .addComponent(btnAddDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
                 .addComponent(btnUpdateDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 133, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -654,11 +748,17 @@ public class MainAplikacija extends javax.swing.JFrame {
             .addGroup(pnlMovieDirectorLayout.createSequentialGroup()
                 .addComponent(jScrollPane6)
                 .addContainerGap())
+            .addGroup(pnlMovieDirectorLayout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(lbSignInViewMovieDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 265, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         pnlMovieDirectorLayout.setVerticalGroup(
             pnlMovieDirectorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlMovieDirectorLayout.createSequentialGroup()
-                .addGap(95, 95, 95)
+                .addGap(24, 24, 24)
+                .addComponent(lbSignInViewMovieDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(18, 18, 18)
                 .addGroup(pnlMovieDirectorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lbLastNameDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(lbFirstNameDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -668,7 +768,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                     .addComponent(tfLastNameDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(lbFirstNameDirectorError)
                     .addComponent(lbLastNameDirectorError))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 43, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 59, Short.MAX_VALUE)
                 .addGroup(pnlMovieDirectorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnAddDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btnUpdateDirector, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -680,24 +780,132 @@ public class MainAplikacija extends javax.swing.JFrame {
 
         tpApplicationView.addTab("Movie director", pnlMovieDirector);
 
+        lbChooseMovie.setText("Choose movie");
+
+        lbActorsInMovie.setText("Actors in movie");
+
+        cbChooseMovie.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cbChooseMovieActionPerformed(evt);
+            }
+        });
+
+        lbDirectorsInMovie.setText("Directors in movie");
+
+        jScrollPane7.setViewportView(lstActorsInMovie);
+
+        jScrollPane8.setViewportView(lstDirectorsInMovie);
+
+        jScrollPane9.setViewportView(lstAllDirectors);
+
+        lbAllDirectors.setText("All directors");
+
+        lbAllActors.setText("All actors");
+
+        jScrollPane10.setViewportView(lstAllActors);
+
+        lbSignInViewDnD.setText("Signed in as:");
+
+        jPanel1.setBackground(new java.awt.Color(255, 0, 51));
+
+        javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 0, Short.MAX_VALUE)
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 71, Short.MAX_VALUE)
+        );
+
         javax.swing.GroupLayout pnlModelDnDMovieLayout = new javax.swing.GroupLayout(pnlModelDnDMovie);
         pnlModelDnDMovie.setLayout(pnlModelDnDMovieLayout);
         pnlModelDnDMovieLayout.setHorizontalGroup(
             pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 899, Short.MAX_VALUE)
+            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                .addGap(15, 15, 15)
+                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                        .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addContainerGap())
+                    .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                        .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jScrollPane10, javax.swing.GroupLayout.PREFERRED_SIZE, 175, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbAllActors, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGap(41, 41, 41)
+                                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jScrollPane9, javax.swing.GroupLayout.PREFERRED_SIZE, 175, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbAllDirectors)))
+                            .addComponent(lbSignInViewDnD, javax.swing.GroupLayout.PREFERRED_SIZE, 246, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 260, Short.MAX_VALUE)
+                        .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addComponent(lbChooseMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 102, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(175, 175, 175))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jScrollPane7, javax.swing.GroupLayout.PREFERRED_SIZE, 175, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbActorsInMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGap(41, 41, 41)
+                                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jScrollPane8, javax.swing.GroupLayout.PREFERRED_SIZE, 175, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbDirectorsInMovie))
+                                .addGap(23, 23, 23))))))
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlModelDnDMovieLayout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(cbChooseMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 264, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(86, 86, 86))
         );
         pnlModelDnDMovieLayout.setVerticalGroup(
             pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 685, Short.MAX_VALUE)
+            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                        .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addGap(29, 29, 29)
+                                .addComponent(lbChooseMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addGap(20, 20, 20)
+                                .addComponent(lbSignInViewDnD, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(cbChooseMovie, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 19, Short.MAX_VALUE)
+                        .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
+                            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addGap(32, 32, 32)
+                                .addComponent(jScrollPane9, javax.swing.GroupLayout.DEFAULT_SIZE, 455, Short.MAX_VALUE))
+                            .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                    .addComponent(lbAllActors, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbAllDirectors, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbActorsInMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(lbDirectorsInMovie, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGroup(pnlModelDnDMovieLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                    .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(jScrollPane10, javax.swing.GroupLayout.DEFAULT_SIZE, 455, Short.MAX_VALUE))
+                                    .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                                        .addGap(6, 6, 6)
+                                        .addComponent(jScrollPane8))))))
+                    .addGroup(pnlModelDnDMovieLayout.createSequentialGroup()
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(jScrollPane7, javax.swing.GroupLayout.PREFERRED_SIZE, 455, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addGap(18, 18, 18)
+                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap())
         );
 
         tpApplicationView.addTab("Insert models into Movie", pnlModelDnDMovie);
 
-        jLabel1.setText("Password");
+        lbPassword.setText("Password");
 
-        jLabel2.setText("Username");
+        lbUsername.setText("Username");
 
-        jLabel3.setText("Administrator");
+        lbAdministrator.setText("Administrator");
 
         tblAccounts.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
@@ -751,90 +959,122 @@ public class MainAplikacija extends javax.swing.JFrame {
         lbUsernameError.setForeground(new java.awt.Color(255, 0, 51));
         lbUsernameError.setText("X");
 
-        jLabel4.setText("Load movies to database");
+        lbLoadMoviesFromDB.setText("Load movies to database");
 
-        jLabel5.setText("Delete all movies from database");
+        lbDeleteMoviesFromDB.setText("Delete all movies from database");
 
         btnLoadMovies.setText("Load movies");
+        btnLoadMovies.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnLoadMoviesActionPerformed(evt);
+            }
+        });
 
         btnDeleteMovies.setText("Delete movies");
+        btnDeleteMovies.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnDeleteMoviesActionPerformed(evt);
+            }
+        });
+
+        lbSignInViewAccManager.setText("Signed in as:");
+
+        lbXMLDownload.setText("XML download");
+
+        btnSaveMovies.setText("Save movies");
+        btnSaveMovies.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnSaveMoviesActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout pnlAccountManagerLayout = new javax.swing.GroupLayout(pnlAccountManager);
         pnlAccountManager.setLayout(pnlAccountManagerLayout);
         pnlAccountManagerLayout.setHorizontalGroup(
             pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlAccountManagerLayout.createSequentialGroup()
+                .addComponent(jScrollPane5)
+                .addContainerGap())
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAccountManagerLayout.createSequentialGroup()
                 .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane5, javax.swing.GroupLayout.DEFAULT_SIZE, 893, Short.MAX_VALUE)
                     .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                        .addGap(33, 33, 33)
+                        .addGap(65, 65, 65)
+                        .addComponent(btnAddAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(129, 129, 129)
+                        .addComponent(btnUpdateAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(132, 132, 132)
+                        .addComponent(btnDeleteAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAccountManagerLayout.createSequentialGroup()
+                        .addGap(31, 31, 31)
                         .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(pnlAccountManagerLayout.createSequentialGroup()
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAccountManagerLayout.createSequentialGroup()
                                 .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, pnlAccountManagerLayout.createSequentialGroup()
                                         .addGap(56, 56, 56)
-                                        .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 85, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                        .addComponent(lbUsername, javax.swing.GroupLayout.PREFERRED_SIZE, 85, javax.swing.GroupLayout.PREFERRED_SIZE))
                                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, pnlAccountManagerLayout.createSequentialGroup()
                                         .addComponent(tfUsername, javax.swing.GroupLayout.PREFERRED_SIZE, 211, javax.swing.GroupLayout.PREFERRED_SIZE)
                                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                         .addComponent(lbUsernameError, javax.swing.GroupLayout.PREFERRED_SIZE, 42, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addGap(115, 115, 115)
                                 .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                                     .addGroup(pnlAccountManagerLayout.createSequentialGroup()
                                         .addGap(80, 80, 80)
-                                        .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 136, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                        .addComponent(lbPassword, javax.swing.GroupLayout.PREFERRED_SIZE, 136, javax.swing.GroupLayout.PREFERRED_SIZE))
                                     .addComponent(tfPassword, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 216, javax.swing.GroupLayout.PREFERRED_SIZE))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addComponent(lbPasswordError, javax.swing.GroupLayout.PREFERRED_SIZE, 42, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(78, 78, 78)
+                                .addGap(40, 40, 40))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAccountManagerLayout.createSequentialGroup()
+                                .addComponent(lbSignInViewAccManager, javax.swing.GroupLayout.PREFERRED_SIZE, 261, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(43, 43, 43)
+                                .addComponent(lbXMLDownload, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(368, 368, 368))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAccountManagerLayout.createSequentialGroup()
+                                .addComponent(btnSaveMovies, javax.swing.GroupLayout.PREFERRED_SIZE, 97, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(98, 98, 98)
                                 .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                    .addComponent(lbLoadMoviesFromDB, javax.swing.GroupLayout.PREFERRED_SIZE, 146, javax.swing.GroupLayout.PREFERRED_SIZE)
                                     .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                                        .addGap(18, 18, 18)
-                                        .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 136, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                    .addComponent(cbUserType, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 154, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(lbAdministratorError, javax.swing.GroupLayout.PREFERRED_SIZE, 42, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(31, 31, 31))
-                            .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                                        .addGap(51, 51, 51)
-                                        .addComponent(btnAddAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addGap(129, 129, 129)
-                                        .addComponent(btnUpdateAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                    .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                                        .addGap(185, 185, 185)
+                                        .addGap(10, 10, 10)
                                         .addComponent(btnLoadMovies)))
-                                .addGap(125, 125, 125)
-                                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(btnDeleteAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 142, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addComponent(btnDeleteMovies))
-                                .addGap(0, 0, Short.MAX_VALUE)))))
-                .addContainerGap())
-            .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                .addGap(188, 188, 188)
-                .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 146, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 182, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(147, 147, 147))
+                                .addGap(127, 127, 127)))))
+                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(lbDeleteMoviesFromDB, javax.swing.GroupLayout.PREFERRED_SIZE, 182, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(pnlAccountManagerLayout.createSequentialGroup()
+                        .addGap(28, 28, 28)
+                        .addComponent(btnDeleteMovies))
+                    .addGroup(pnlAccountManagerLayout.createSequentialGroup()
+                        .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addGroup(pnlAccountManagerLayout.createSequentialGroup()
+                                .addGap(18, 18, 18)
+                                .addComponent(lbAdministrator, javax.swing.GroupLayout.PREFERRED_SIZE, 136, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(cbUserType, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 154, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(lbAdministratorError, javax.swing.GroupLayout.PREFERRED_SIZE, 42, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addGap(75, 75, 75))
         );
         pnlAccountManagerLayout.setVerticalGroup(
             pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                .addContainerGap()
-                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(btnLoadMovies, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(btnDeleteMovies, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(37, 37, 37)
-                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addGroup(pnlAccountManagerLayout.createSequentialGroup()
+                        .addGap(16, 16, 16)
+                        .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(lbLoadMoviesFromDB, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbDeleteMoviesFromDB, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbSignInViewAccManager, javax.swing.GroupLayout.PREFERRED_SIZE, 29, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbXMLDownload, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(btnLoadMovies, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(btnDeleteMovies, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(btnSaveMovies, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addGap(31, 31, 31)
                         .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jLabel2, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(lbAdministrator, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(lbUsername, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE))
                         .addGap(18, 18, 18)
                         .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                             .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
@@ -843,13 +1083,14 @@ public class MainAplikacija extends javax.swing.JFrame {
                             .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                                 .addComponent(cbUserType, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addComponent(lbAdministratorError, javax.swing.GroupLayout.PREFERRED_SIZE, 34, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                    .addGroup(pnlAccountManagerLayout.createSequentialGroup()
-                        .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlAccountManagerLayout.createSequentialGroup()
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(lbPassword, javax.swing.GroupLayout.PREFERRED_SIZE, 28, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(18, 18, 18)
                         .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                             .addComponent(tfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, 34, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(lbPasswordError, javax.swing.GroupLayout.PREFERRED_SIZE, 34, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 74, Short.MAX_VALUE)
+                .addGap(66, 66, 66)
                 .addGroup(pnlAccountManagerLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnUpdateAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 44, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btnAddAccount, javax.swing.GroupLayout.PREFERRED_SIZE, 44, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -860,6 +1101,91 @@ public class MainAplikacija extends javax.swing.JFrame {
         );
 
         tpApplicationView.addTab("Acccount/Movie manager", pnlAccountManager);
+
+        jmNavigation.setText("Navigation");
+
+        miAllMovies.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miAllMovies.setText("All movies card");
+        miAllMovies.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miAllMoviesActionPerformed(evt);
+            }
+        });
+        jmNavigation.add(miAllMovies);
+
+        miMovie.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miMovie.setText("Movie card");
+        miMovie.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miMovieActionPerformed(evt);
+            }
+        });
+        jmNavigation.add(miMovie);
+
+        miActor.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miActor.setText("Actor card");
+        miActor.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miActorActionPerformed(evt);
+            }
+        });
+        jmNavigation.add(miActor);
+
+        miMovieDirector.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miMovieDirector.setText("Movie director card");
+        miMovieDirector.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miMovieDirectorActionPerformed(evt);
+            }
+        });
+        jmNavigation.add(miMovieDirector);
+
+        miModelInsert.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_X, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miModelInsert.setText("Model insert card");
+        miModelInsert.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miModelInsertActionPerformed(evt);
+            }
+        });
+        jmNavigation.add(miModelInsert);
+
+        jMenuBar1.add(jmNavigation);
+
+        jmOptions.setText("Options");
+
+        miExitApp.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_E, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miExitApp.setText("Exit application");
+        miExitApp.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miExitAppActionPerformed(evt);
+            }
+        });
+        jmOptions.add(miExitApp);
+
+        miPrintMovies.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miPrintMovies.setText("Print movies");
+        miPrintMovies.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                miPrintMoviesActionPerformed(evt);
+            }
+        });
+        jmOptions.add(miPrintMovies);
+
+        mnChangeLanguage.setText("Change language");
+
+        miCroatian.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miCroatian.setText("Croatian");
+        mnChangeLanguage.add(miCroatian);
+
+        miEnglish.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_G, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        miEnglish.setText("English");
+        mnChangeLanguage.add(miEnglish);
+
+        jmOptions.add(mnChangeLanguage);
+
+        jMenuBar1.add(jmOptions);
+
+        setJMenuBar(jMenuBar1);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -876,19 +1202,14 @@ public class MainAplikacija extends javax.swing.JFrame {
         setLocationRelativeTo(null);
     }// </editor-fold>//GEN-END:initComponents
 
-    private void cbOperationActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cbOperationActionPerformed
-
-        // ChoosenOperation();
-
-    }//GEN-LAST:event_cbOperationActionPerformed
-
     private void btnAddMovieActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnAddMovieActionPerformed
         try {
             if (valueValid(movieLayout)) {
                 hideErrors();
                 repository.createMovie(new Movie(
                         tfMovieTitle.getText().trim(),
-                        (Genre) cbGenre.getSelectedItem(),
+                        tfChoosenGenre.getText().trim(),
+                        //(Genre) cbGenre.getSelectedItem(),
                         taMovieDescription.getText().trim(),
                         (int) spMovieDuration.getValue(),
                         (int) spMovieYear.getValue(),
@@ -900,15 +1221,18 @@ public class MainAplikacija extends javax.swing.JFrame {
             allMoviesTableModel.setAllmovies(repository.selectAllMovies());
             movieTableModel.setMovies(repository.selectMovies());
             setEmpty(movieLayout, defaultPoster);
+            loadMoviesToCB();
+            clearChoosenGenres();
 
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_btnAddMovieActionPerformed
 
     private void btnUpdateMovieActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnUpdateMovieActionPerformed
         if (selectedMovieId == 0) {
             MessageUtils.messageInformation("Empty movie selection", "Please select movie from the table before updating.");
+            return;
         }
 
         try {
@@ -916,7 +1240,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                 hideErrors();
                 repository.updateMovie(selectedMovieId, new Movie(
                         tfMovieTitle.getText().trim(),
-                        (Genre) cbGenre.getSelectedItem(),
+                        tfChoosenGenre.getText().trim(),
                         taMovieDescription.getText().trim(),
                         (int) spMovieDuration.getValue(),
                         (int) spMovieYear.getValue(),
@@ -928,9 +1252,10 @@ public class MainAplikacija extends javax.swing.JFrame {
             allMoviesTableModel.setAllmovies(repository.selectAllMovies());
             movieTableModel.setMovies(repository.selectMovies());
             setEmpty(movieLayout, defaultPoster);
-
+            loadMoviesToCB();
+            clearChoosenGenres();
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btnUpdateMovieActionPerformed
@@ -938,6 +1263,7 @@ public class MainAplikacija extends javax.swing.JFrame {
     private void btnDeleteMovieActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnDeleteMovieActionPerformed
         if (selectedMovieId == 0) {
             MessageUtils.messageInformation("Empty movie selection", "Please select movie from the table before deleting.");
+            return;
         }
 
         if (MessageUtils.messageConfirmError("Deleting movie", "Do you really want to delete selected movie")) {
@@ -946,9 +1272,10 @@ public class MainAplikacija extends javax.swing.JFrame {
                 allMoviesTableModel.setAllmovies(repository.selectAllMovies());
                 movieTableModel.setMovies(repository.selectMovies());
                 EmptyInput.setEmpty(movieLayout, defaultPoster, selectedMovieId);
-
+                loadMoviesToCB();
+                clearChoosenGenres();
             } catch (Exception ex) {
-                Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }//GEN-LAST:event_btnDeleteMovieActionPerformed
@@ -980,8 +1307,9 @@ public class MainAplikacija extends javax.swing.JFrame {
             allMoviesTableModel.setAllmovies(repository.selectAllMovies());
             actorTableModel.setActors(repository.selectActors());
             EmptyInput.setEmpty(actorLayout);
+            loadAllActorsAndDirectors();
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btnAddActorActionPerformed
@@ -989,6 +1317,7 @@ public class MainAplikacija extends javax.swing.JFrame {
     private void btnUpdateActorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnUpdateActorActionPerformed
         if (selectedActorId == 0) {
             MessageUtils.messageInformation("Empty actor selection", "Please select actor from the table before updating.");
+            return;
         }
 
         try {
@@ -1004,8 +1333,10 @@ public class MainAplikacija extends javax.swing.JFrame {
             allMoviesTableModel.setAllmovies(repository.selectAllMovies());
             actorTableModel.setActors(repository.selectActors());
             EmptyInput.setEmpty(actorLayout);
+            loadAllActorsAndDirectors();
+
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btnUpdateActorActionPerformed
@@ -1014,6 +1345,7 @@ public class MainAplikacija extends javax.swing.JFrame {
 
         if (selectedActorId == 0) {
             MessageUtils.messageInformation("Empty actor selection", "Please select actor from the table before deleting.");
+            return;
         }
 
         if (MessageUtils.messageConfirmError("Deleting actor", "Do you really want to delete selected actor")) {
@@ -1022,8 +1354,10 @@ public class MainAplikacija extends javax.swing.JFrame {
                 allMoviesTableModel.setAllmovies(repository.selectAllMovies());
                 actorTableModel.setActors(repository.selectActors());
                 EmptyInput.setEmpty(actorLayout, selectedActorId);
+                loadAllActorsAndDirectors();
+
             } catch (Exception ex) {
-                Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
 
@@ -1041,20 +1375,22 @@ public class MainAplikacija extends javax.swing.JFrame {
                 ));
             } else {
                 showErrors(directorErrorList);
+
             }
             allMoviesTableModel.setAllmovies(repository.selectAllMovies());
             directorTableModel.setDirectors(repository.selectDirectors());
             EmptyInput.setEmpty(directorLayout);
+            loadAllActorsAndDirectors();
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
-// TODO add your handling code here:
     }//GEN-LAST:event_btnAddDirectorActionPerformed
 
     private void btnUpdateDirectorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnUpdateDirectorActionPerformed
         if (selectedDirectorId == 0) {
             MessageUtils.messageInformation("Empty director selection", "Please select actor from the table before updating.");
+            return;
         }
         try {
             if (valueValid(directorLayout)) {
@@ -1069,8 +1405,9 @@ public class MainAplikacija extends javax.swing.JFrame {
             allMoviesTableModel.setAllmovies(repository.selectAllMovies());
             directorTableModel.setDirectors(repository.selectDirectors());
             EmptyInput.setEmpty(directorLayout);
+            loadAllActorsAndDirectors();
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btnUpdateDirectorActionPerformed
@@ -1078,6 +1415,7 @@ public class MainAplikacija extends javax.swing.JFrame {
     private void btnDeleteDirectorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnDeleteDirectorActionPerformed
         if (selectedDirectorId == 0) {
             MessageUtils.messageInformation("Empty director selection", "Please select director from the table before deleting.");
+            return;
         }
         if (MessageUtils.messageConfirmError("Deleting director", "Do you really want to delete selected director")) {
             try {
@@ -1085,8 +1423,9 @@ public class MainAplikacija extends javax.swing.JFrame {
                 allMoviesTableModel.setAllmovies(repository.selectAllMovies());
                 directorTableModel.setDirectors(repository.selectDirectors());
                 EmptyInput.setEmpty(directorLayout, selectedDirectorId);
+                loadAllActorsAndDirectors();
             } catch (Exception ex) {
-                Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
 
@@ -1094,11 +1433,16 @@ public class MainAplikacija extends javax.swing.JFrame {
     }//GEN-LAST:event_btnDeleteDirectorActionPerformed
 
     private void tblMoviesMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_tblMoviesMouseClicked
+
+        sb.setLength(0);
+        genreCounter = 0;
+
         int selectedMovie = tblMovies.getSelectedRow();
 
         int rowIndexMovie = tblMovies.convertRowIndexToModel(selectedMovie);
 
         selectedMovieId = (int) movieTableModel.getValueAt(rowIndexMovie, 0);
+        genreCounter++;
 
         try {
             Optional optMovie = repository.selectMovie(selectedMovieId);
@@ -1106,7 +1450,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                 fillForm(optMovie);
             }
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_tblMoviesMouseClicked
 
@@ -1121,7 +1465,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                 fillForm(optActor);
             }
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_tblActorsMouseClicked
 
@@ -1137,7 +1481,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                 fillForm(optDirector);
             }
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_tblDirectorsMouseClicked
@@ -1149,7 +1493,7 @@ public class MainAplikacija extends javax.swing.JFrame {
                 hideErrors();
                 repository.createAccount(new Account(
                         tfUsername.getText().trim(),
-                        tfPassword.getText().trim(),
+                        PasswordHashing.hashPassword(tfPassword.getText().trim()),
                         (UserType) cbUserType.getSelectedItem()));
                 accTableModel.setAccounts(repository.getAccounts());
 
@@ -1159,7 +1503,7 @@ public class MainAplikacija extends javax.swing.JFrame {
             EmptyInput.setEmpty(accountLayout, selectedAccountId);
 
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btnAddAccountActionPerformed
@@ -1167,7 +1511,9 @@ public class MainAplikacija extends javax.swing.JFrame {
     private void btnUpdateAccountActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnUpdateAccountActionPerformed
         if (selectedAccountId == 0) {
             MessageUtils.messageInformation("Empty account selection", "Please select an account from the table before updating.");
+            return;
         }
+
         try {
             if (valueValid(accountLayout)) {
                 hideErrors();
@@ -1183,7 +1529,7 @@ public class MainAplikacija extends javax.swing.JFrame {
             EmptyInput.setEmpty(accountLayout, selectedAccountId);
 
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btnUpdateAccountActionPerformed
@@ -1191,21 +1537,17 @@ public class MainAplikacija extends javax.swing.JFrame {
     private void btnDeleteAccountActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnDeleteAccountActionPerformed
         if (selectedAccountId == 0) {
             MessageUtils.messageInformation("Empty account selection", "Please select an account from the table before deleting.");
+            return;
         }
         if (MessageUtils.messageConfirmError("Deleting account", "Do you really want to delete selected account?")) {
             try {
-                if (valueValid(accountLayout)) {
-                    hideErrors();
-                    repository.deleteAccount(selectedAccountId);
-                    accTableModel.setAccounts(repository.getAccounts());
-
-                } else {
-                    showErrors(accountErrorList);
-                }
+                hideErrors();
+                repository.deleteAccount(selectedAccountId);
+                accTableModel.setAccounts(repository.getAccounts());
                 EmptyInput.setEmpty(accountLayout, selectedAccountId);
 
             } catch (Exception ex) {
-                Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
 
@@ -1222,44 +1564,149 @@ public class MainAplikacija extends javax.swing.JFrame {
                 fillForm(optAccount);
             }
         } catch (Exception ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_tblAccountsMouseClicked
+
+    private void btnLoadMoviesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLoadMoviesActionPerformed
+
+        try {
+            if (movieTableModel.getRowCount() == 0 && actorTableModel.getRowCount() == 0 && directorTableModel.getRowCount() == 0) {
+                List<Movie> movies = MovieParser.parseMovie();
+                for (Movie movie : movies) {
+                    try {
+                        repository.uploadMovies(movie);
+                    } catch (Exception ex) {
+                        Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                }
+                movieTableModel.setMovies(repository.selectMovies());
+                allMoviesTableModel.setAllmovies(repository.selectAllMovies());
+                actorTableModel.setActors(repository.selectActors());
+                directorTableModel.setDirectors(repository.selectDirectors());
+                loadAllActorsAndDirectors();
+            }
+        } catch (XMLStreamException | IOException ex) {
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception ex) {
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+
+    }//GEN-LAST:event_btnLoadMoviesActionPerformed
+
+    private void btnDeleteMoviesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnDeleteMoviesActionPerformed
+
+        try {
+            if (MessageUtils.messageConfirmError("MOVIE ENTITIES DELETION", "Warning this act will delete all movies,actors and directors!")) {
+                repository.deleteAllMovies();
+                repository.deleteAllActors();
+                repository.deleteAllMovieDirectors();
+                deleteDirectory();
+                movieTableModel.setMovies(repository.selectMovies());
+                allMoviesTableModel.setAllmovies(repository.selectAllMovies());
+                actorTableModel.setActors(repository.selectActors());
+                directorTableModel.setDirectors(repository.selectDirectors());
+                clearChoosenGenres();
+                EmptyInput.setEmpty(movieLayout, defaultPoster, selectedMovieId);
+                EmptyInput.setEmpty(actorLayout, selectedActorId);
+                EmptyInput.setEmpty(directorLayout, selectedDirectorId);
+                loadAllActorsAndDirectors();
+
+            }
+        } catch (Exception ex) {
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+    }//GEN-LAST:event_btnDeleteMoviesActionPerformed
+
+    private void cbGenreActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cbGenreActionPerformed
+
+        String genre = cbGenre.getSelectedItem().toString();
+        genreCounter++;
+        String[] genres = tfChoosenGenre.getText().trim().split(",");
+        for (int i = 0; i < genres.length; i++) {
+            if (genre.equals(genres[i])) {
+                MessageUtils.messageError("GENRE DUPLICATION", "You can't enter the same genre twice.");
+                return;
+            }
+        }
+        if (genres.length >= 4) {
+            MessageUtils.messageInformation("GENRE RESTRICTION", "You can only enter 4 genres for one movie.");
+            return;
+        }
+        if (tfChoosenGenre.getText() != null && genreCounter > 1) {
+            sb.append(", ").append(genre);
+        } else {
+            sb.append(genre);
+        }
+        tfChoosenGenre.setText(sb.toString());
+
+
+    }//GEN-LAST:event_cbGenreActionPerformed
+
+    private void btnClearChosenGenresActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnClearChosenGenresActionPerformed
+        clearChoosenGenres();
+    }//GEN-LAST:event_btnClearChosenGenresActionPerformed
+
+    private void miExitAppActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miExitAppActionPerformed
+        if (MessageUtils.messageConfirmError("EXITING APPLICATION", "Do you really want to exit the application?")) {
+            System.exit(0);
+        }
+    }//GEN-LAST:event_miExitAppActionPerformed
+
+    private void miMovieActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miMovieActionPerformed
+        focusPanel(pnlMovie);
+    }//GEN-LAST:event_miMovieActionPerformed
+
+    private void miAllMoviesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miAllMoviesActionPerformed
+        focusPanel(pnlAllMovies);
+    }//GEN-LAST:event_miAllMoviesActionPerformed
+
+    private void miActorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miActorActionPerformed
+        focusPanel(pnlActor);
+    }//GEN-LAST:event_miActorActionPerformed
+
+    private void miMovieDirectorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miMovieDirectorActionPerformed
+        focusPanel(pnlMovieDirector);
+    }//GEN-LAST:event_miMovieDirectorActionPerformed
+
+    private void miModelInsertActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miModelInsertActionPerformed
+        focusPanel(pnlModelDnDMovie);
+    }//GEN-LAST:event_miModelInsertActionPerformed
+
+    private void miPrintMoviesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_miPrintMoviesActionPerformed
+        PrinterJob printerJob = PrinterJob.getPrinterJob();
+        printerJob.printDialog();
+    }//GEN-LAST:event_miPrintMoviesActionPerformed
+
+    private void btnSaveMoviesActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnSaveMoviesActionPerformed
+
+        try {
+            List<Movie> movies = repository.selectAllMovies();
+            MovieArchive archive = new MovieArchive(movies);
+            JAXBUtils.save(archive, FILENAME);
+        } catch (JAXBException ex) {
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception ex) {
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+
+    }//GEN-LAST:event_btnSaveMoviesActionPerformed
+
+    private void cbChooseMovieActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cbChooseMovieActionPerformed
+        insertedDirectorsModel.clear();
+        insertedActorsModel.clear();
+        insertedActors.clear();
+        insertedDirectors.clear();
+    }//GEN-LAST:event_cbChooseMovieActionPerformed
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
-        try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(MainAplikacija.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(MainAplikacija.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(MainAplikacija.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(MainAplikacija.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
+ 
 
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new MainAplikacija().setVisible(true);
-            }
-        });
-    }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton btnAddAccount;
@@ -1267,54 +1714,89 @@ public class MainAplikacija extends javax.swing.JFrame {
     private javax.swing.JButton btnAddDirector;
     private javax.swing.JButton btnAddMovie;
     private javax.swing.JButton btnChoosePoster;
+    private javax.swing.JButton btnClearChosenGenres;
     private javax.swing.JButton btnDeleteAccount;
     private javax.swing.JButton btnDeleteActor;
     private javax.swing.JButton btnDeleteDirector;
     private javax.swing.JButton btnDeleteMovie;
     private javax.swing.JButton btnDeleteMovies;
     private javax.swing.JButton btnLoadMovies;
+    private javax.swing.JButton btnSaveMovies;
     private javax.swing.JButton btnUpdateAccount;
     private javax.swing.JButton btnUpdateActor;
     private javax.swing.JButton btnUpdateDirector;
     private javax.swing.JButton btnUpdateMovie;
+    private javax.swing.JComboBox<Movie> cbChooseMovie;
     private javax.swing.JComboBox<Genre> cbGenre;
-    private javax.swing.JComboBox<CRUD_Operations> cbOperation;
     private javax.swing.JComboBox<UserType> cbUserType;
-    private javax.swing.JLabel jLabel1;
-    private javax.swing.JLabel jLabel2;
-    private javax.swing.JLabel jLabel3;
-    private javax.swing.JLabel jLabel4;
-    private javax.swing.JLabel jLabel5;
+    private javax.swing.JMenuBar jMenuBar1;
+    private javax.swing.JPanel jPanel1;
     private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JScrollPane jScrollPane10;
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JScrollPane jScrollPane4;
     private javax.swing.JScrollPane jScrollPane5;
     private javax.swing.JScrollPane jScrollPane6;
+    private javax.swing.JScrollPane jScrollPane7;
+    private javax.swing.JScrollPane jScrollPane8;
+    private javax.swing.JScrollPane jScrollPane9;
+    private javax.swing.JMenu jmNavigation;
+    private javax.swing.JMenu jmOptions;
+    private javax.swing.JLabel lbActorsInMovie;
+    private javax.swing.JLabel lbAdministrator;
     private javax.swing.JLabel lbAdministratorError;
+    private javax.swing.JLabel lbAllActors;
+    private javax.swing.JLabel lbAllDirectors;
+    private javax.swing.JLabel lbChooseMovie;
+    private javax.swing.JLabel lbDeleteMoviesFromDB;
     private javax.swing.JLabel lbDescription;
+    private javax.swing.JLabel lbDirectorsInMovie;
     private javax.swing.JLabel lbDuration;
     private javax.swing.JLabel lbFirstNameActor;
     private javax.swing.JLabel lbFirstNameActorError;
     private javax.swing.JLabel lbFirstNameDirector;
     private javax.swing.JLabel lbFirstNameDirectorError;
+    private javax.swing.JLabel lbGenreError;
     private javax.swing.JLabel lbLastNameActor;
     private javax.swing.JLabel lbLastNameActorError;
     private javax.swing.JLabel lbLastNameDirector;
     private javax.swing.JLabel lbLastNameDirectorError;
+    private javax.swing.JLabel lbLoadMoviesFromDB;
     private javax.swing.JLabel lbMovieDescriptionError;
     private javax.swing.JLabel lbMovieDurationError;
     private javax.swing.JLabel lbMovieGenre;
     private javax.swing.JLabel lbMovieTitle;
     private javax.swing.JLabel lbMovieTitleError;
-    private javax.swing.JLabel lbOperation;
+    private javax.swing.JLabel lbPassword;
     private javax.swing.JLabel lbPasswordError;
     private javax.swing.JLabel lbPoster;
     private javax.swing.JLabel lbReleaseYear;
     private javax.swing.JLabel lbReleaseYearError;
     private javax.swing.JLabel lbSignInView;
+    private javax.swing.JLabel lbSignInViewAccManager;
+    private javax.swing.JLabel lbSignInViewActor;
+    private javax.swing.JLabel lbSignInViewDnD;
+    private javax.swing.JLabel lbSignInViewMovie;
+    private javax.swing.JLabel lbSignInViewMovieDirector;
     private javax.swing.JLabel lbTitleMoviePoster;
+    private javax.swing.JLabel lbUsername;
     private javax.swing.JLabel lbUsernameError;
+    private javax.swing.JLabel lbXMLDownload;
+    private javax.swing.JList<Actor> lstActorsInMovie;
+    private javax.swing.JList<Actor> lstAllActors;
+    private javax.swing.JList<Director> lstAllDirectors;
+    private javax.swing.JList<Director> lstDirectorsInMovie;
+    private javax.swing.JMenuItem miActor;
+    private javax.swing.JMenuItem miAllMovies;
+    private javax.swing.JMenuItem miCroatian;
+    private javax.swing.JMenuItem miEnglish;
+    private javax.swing.JMenuItem miExitApp;
+    private javax.swing.JMenuItem miModelInsert;
+    private javax.swing.JMenuItem miMovie;
+    private javax.swing.JMenuItem miMovieDirector;
+    private javax.swing.JMenuItem miPrintMovies;
+    private javax.swing.JMenu mnChangeLanguage;
     private javax.swing.JPanel pnlAccountManager;
     private javax.swing.JPanel pnlActor;
     private javax.swing.JPanel pnlAllMovies;
@@ -1329,6 +1811,7 @@ public class MainAplikacija extends javax.swing.JFrame {
     private javax.swing.JTable tblAllMovies;
     private javax.swing.JTable tblDirectors;
     private javax.swing.JTable tblMovies;
+    private javax.swing.JTextField tfChoosenGenre;
     private javax.swing.JTextField tfFirstNameActor;
     private javax.swing.JTextField tfFirstNameDirector;
     private javax.swing.JTextField tfLastNameActor;
@@ -1341,8 +1824,8 @@ public class MainAplikacija extends javax.swing.JFrame {
     // End of variables declaration//GEN-END:variables
 
     private void initComponentLists() {
-
-        movieLayout = Arrays.asList(lbDescription,
+        movieLayout = Arrays.asList(
+                lbDescription,
                 lbDuration,
                 lbMovieGenre,
                 lbTitleMoviePoster,
@@ -1355,7 +1838,8 @@ public class MainAplikacija extends javax.swing.JFrame {
                 spMovieDuration,
                 spMovieYear,
                 cbGenre,
-                taMovieDescription);
+                taMovieDescription,
+                tfChoosenGenre);
         actorLayout = Arrays.asList(
                 lbFirstNameActor,
                 lbLastNameActor,
@@ -1373,7 +1857,8 @@ public class MainAplikacija extends javax.swing.JFrame {
                 lbMovieTitleError,
                 lbMovieDurationError,
                 lbReleaseYearError,
-                lbMovieDescriptionError);
+                lbMovieDescriptionError,
+                lbGenreError);
         actorErrorList = Arrays.asList(
                 lbFirstNameActorError,
                 lbLastNameActorError);
@@ -1386,59 +1871,8 @@ public class MainAplikacija extends javax.swing.JFrame {
                 lbAdministratorError);
     }
 
-    private void initOperations() {
-        DefaultComboBoxModel<CRUD_Operations> crudModel = new DefaultComboBoxModel<>();
-        for (CRUD_Operations crudOperation : CRUD_Operations.values()) {
-            crudModel.addElement(crudOperation);
-        }
-        cbOperation.setModel(crudModel);
-    }
-
-    /*
-    private void ChoosenOperation() {
-        String operation = cbOperation.getSelectedItem().toString();
-        // Map<String,ControlCreator>
-        switch (operation) {
-            case MOVIE:
-                showLayout(movieLayout);
-                break;
-            case ACTOR:
-                hideLayout(movieLayout);
-                showPersonCreate();
-
-                break;
-            case DIRECTOR:
-                hideLayout(movieLayout);
-                showPersonCreate();
-
-                break;
-            default:
-                throw new AssertionError();
-        }
-
-    }
-  
-
-    private void hideLayout(List<Component> components) {
-        components.forEach(x -> x.setVisible(false));
-    }
-
-    private void showLayout(List<Component> components) {
-        components.forEach(x -> x.setVisible(true));
-
-    }
-
-    private void showPersonCreate() {
-    }
-     */
     private void initGenres() {
-        /*
-        DefaultComboBoxModel<Genre> genres = new DefaultComboBoxModel<>();
-        for (Genre genre : Genre.values()) {
-            genres.addElement(genre);
-        }
-        cbGenre.setModel(genres);
-         */
+
         cbGenre.setModel(new DefaultComboBoxModel<>(Genre.values()));
     }
 
@@ -1462,7 +1896,7 @@ public class MainAplikacija extends javax.swing.JFrame {
         try {
             label.setIcon(IconUtils.setPoster(fileImage, lbPoster.getWidth(), lbPoster.getHeight()));
         } catch (IOException ex) {
-            Logger.getLogger(MainAplikacija.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
@@ -1489,14 +1923,14 @@ public class MainAplikacija extends javax.swing.JFrame {
         tblAllMovies.setRowHeight(25);
         tblAllMovies.setAutoCreateRowSorter(true);
         tblActors.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        allMoviesTableModel = new allmoviesTableModel(repository.selectAllMovies());
+        allMoviesTableModel = new AllmoviesTableModel(repository.selectAllMovies());
         tblAllMovies.setModel(allMoviesTableModel);
         tblAllMovies.setVisible(true);
 
         tblAccounts.setRowHeight(25);
         tblAccounts.setAutoCreateRowSorter(true);
         tblAccounts.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        accTableModel = new accountTableModel(repository.getAccounts());
+        accTableModel = new AccountTableModel(repository.getAccounts());
         tblAccounts.setModel(accTableModel);
         tblAccounts.setVisible(true);
     }
@@ -1509,7 +1943,9 @@ public class MainAplikacija extends javax.swing.JFrame {
         if (entity.isPresent()) {
             if (entity.get() instanceof Movie movie) {
                 tfMovieTitle.setText(movie.getTitle());
-                cbGenre.setSelectedItem(movie.getGenre());
+                tfChoosenGenre.setText(movie.getGenres().toLowerCase());
+                sb.append(movie.getGenres());
+                //cbGenre.setSelectedItem(movie.getGenre());
                 spMovieYear.setValue(movie.getYear());
                 spMovieDuration.setValue(movie.getDuration());
                 taMovieDescription.setText(movie.getDescription());
@@ -1531,13 +1967,202 @@ public class MainAplikacija extends javax.swing.JFrame {
 
     private void initUsername() {
         Authentication.displayUsername(lbSignInView, Authentication.isAdministrator());
+        Authentication.displayUsername(lbSignInViewMovie, Authentication.isAdministrator());
+        Authentication.displayUsername(lbSignInViewActor, Authentication.isAdministrator());
+        Authentication.displayUsername(lbSignInViewMovieDirector, Authentication.isAdministrator());
+        Authentication.displayUsername(lbSignInViewDnD, Authentication.isAdministrator());
+        Authentication.displayUsername(lbSignInViewAccManager, Authentication.isAdministrator());
 
     }
 
     private void initAuthorization() {
-        if (Authentication.isAdministrator() == false) {
+        if (Authentication.isAdministrator() != true) {
             tpApplicationView.remove(pnlAccountManager);
         }
 
+    }
+
+    private void clearChoosenGenres() {
+        sb.setLength(0);
+        tfChoosenGenre.setText("");
+        genreCounter = 0;
+    }
+
+    private void focusPanel(JPanel panel) {
+        int targetTabIndex = tpApplicationView.indexOfComponent(panel);
+
+        if (targetTabIndex != -1) {
+            tpApplicationView.setSelectedIndex(targetTabIndex);
+            tpApplicationView.requestFocusInWindow();
+        }
+    }
+
+
+    private void loadAllActors() {
+        for (Actor actor : actorsFromDB) {
+            allActorsModel.addElement(actor);
+        }
+        lstAllActors.setModel(allActorsModel);
+    }
+
+    private void insertActors() {
+        for (Actor actor : insertedActors) {
+            insertedActorsModel.addElement(actor);
+        }
+        lstActorsInMovie.setModel(insertedActorsModel);
+    }
+
+    private void insertDirectors() {
+        for (Director director : insertedDirectors) {
+            insertedDirectorsModel.addElement(director);
+        }
+        lstDirectorsInMovie.setModel(insertedDirectorsModel);
+    }
+
+    private void loadAllDirectors() {
+        for (Director director : directorsFromDB) {
+            allDirectorsModel.addElement(director);
+        }
+        lstAllDirectors.setModel(allDirectorsModel);
+    }
+
+    private void loadMoviesToCB() {
+        cbChooseMovie.removeAllItems();
+        DefaultComboBoxModel<Movie> cbm = new DefaultComboBoxModel<>();
+        for (Movie movie : moviesFromDB) {
+            cbm.addElement(movie);
+        }
+        cbChooseMovie.setModel(cbm);
+
+    }
+
+    private void loadAllActorsAndDirectors() throws Exception {
+        allActorsModel.clear();
+        cbChooseMovie.removeAllItems();
+        allDirectorsModel.clear();
+        insertedDirectorsModel.clear();
+        insertedActors.clear();
+        insertedDirectors.clear();
+
+        actorsFromDB = repository.selectActors();
+        directorsFromDB = repository.selectDirectors();
+        moviesFromDB = repository.selectMovies();
+        loadAllActors();
+        loadAllDirectors();
+        loadMoviesToCB();
+    }
+
+    private void initDragNDrop() {
+
+        lstAllActors.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        lstAllActors.setDragEnabled(true);
+        lstAllActors.setTransferHandler(new ExportActorHandler());
+
+        lstActorsInMovie.setDropMode(DropMode.ON);
+        lstActorsInMovie.setTransferHandler(new ImportActorHandler());
+
+        lstAllDirectors.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        lstAllDirectors.setDragEnabled(true);
+        lstAllDirectors.setTransferHandler(new ExportDirectorHandler());
+
+        lstDirectorsInMovie.setDropMode(DropMode.ON);
+        lstDirectorsInMovie.setTransferHandler(new ImportDirectorHandler());
+
+    }
+
+    private class ImportActorHandler extends TransferHandler {
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            return support.isDataFlavorSupported(ActorTransferable.ACTOR_FLAVOR);
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+
+            Transferable transferable = support.getTransferable();
+            try {
+                Actor actor = (Actor) transferable.getTransferData(ActorTransferable.ACTOR_FLAVOR);
+                Movie movie = (Movie) cbChooseMovie.getSelectedItem();
+                if (insertedActors.add(actor)) {
+                    insertedActorsModel.clear();
+                    insertActors();
+                    try {
+                        repository.insertActorInMovie(movie, actor);
+                        allMoviesTableModel.setAllmovies(repository.selectAllMovies());
+
+                    } catch (Exception ex) {
+                        Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                    return true;
+                }
+
+            } catch (UnsupportedFlavorException | IOException ex) {
+                Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            return false;
+        }
+
+    }
+
+    private class ExportActorHandler extends TransferHandler {
+
+        @Override
+        public int getSourceActions(JComponent c) {
+            return COPY;
+        }
+
+        @Override
+        protected Transferable createTransferable(JComponent c) {
+            return new ActorTransferable(lstAllActors.getSelectedValue());
+        }
+    }
+
+    private class ImportDirectorHandler extends TransferHandler {
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            return support.isDataFlavorSupported(DirectorTransferable.DIRECTOR_FLAVOR);
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+
+            Transferable transferable = support.getTransferable();
+            try {
+                Director director = (Director) transferable.getTransferData(DirectorTransferable.DIRECTOR_FLAVOR);
+                Movie movie = (Movie) cbChooseMovie.getSelectedItem();
+                if (insertedDirectors.add(director)) {
+                    insertedDirectorsModel.clear();
+                    insertDirectors();
+                    try {
+                        repository.insertDirectorInMovie(movie, director);
+                        allMoviesTableModel.setAllmovies(repository.selectAllMovies());
+
+                    } catch (Exception ex) {
+                        Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                    return true;
+                }
+
+            } catch (UnsupportedFlavorException | IOException ex) {
+                Logger.getLogger(MovieManager.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            return false;
+        }
+
+    }
+
+    private class ExportDirectorHandler extends TransferHandler {
+
+        @Override
+        public int getSourceActions(JComponent c) {
+            return COPY;
+        }
+
+        @Override
+        protected Transferable createTransferable(JComponent c) {
+            return new DirectorTransferable(lstAllDirectors.getSelectedValue());
+        }
     }
 }

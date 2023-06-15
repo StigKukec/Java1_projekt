@@ -12,12 +12,12 @@ import javax.swing.table.AbstractTableModel;
  *
  * @author natio
  */
-public class accountTableModel extends AbstractTableModel {
+public class AccountTableModel extends AbstractTableModel {
 
     private static final String[] COLUMN = {"Id", "Username", "Password", "UserType"};
     private List<Account> accounts;
 
-    public accountTableModel(List<Account> accounts) {
+    public AccountTableModel(List<Account> accounts) {
         this.accounts = accounts;
     }
 
