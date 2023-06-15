@@ -4,8 +4,11 @@
  */
 package hr.stig.dal;
 
-import hr.stig.dal.sql.SqlRepository;
-
+import hr.stig.dal.sql.DataSourceSingleton;
+import java.io.InputStream;
+import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -13,15 +16,35 @@ import hr.stig.dal.sql.SqlRepository;
  */
 public class RepositoryFactory {
 
-    private static Repository instance;
+    private static Repository repository;
+
+    private static final String PATH = "/configuration/repository.properties";
+    private static final String CLASS_NAME = "CLASS_NAME";
+    private static final Properties properties = new Properties();
+
+    static {
+        try (InputStream is = DataSourceSingleton.class.getResourceAsStream(PATH);) {
+            properties.load(is);
+            repository = (Repository) Class
+                    .forName(properties.getProperty(CLASS_NAME))
+                    .getDeclaredConstructor()
+                    .newInstance();
+        } catch (Exception ex) {
+            Logger.getLogger(RepositoryFactory.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
     private RepositoryFactory() {
         throw new RuntimeException();
     }
-    
+
     public static Repository getRepository() {
-        if (instance == null) {
-            instance =  new SqlRepository();
+        /*
+        if (repository == null) {
+            repository = new SqlRepository();
         }
-        return instance;
+         */
+        return repository;
     }
+
 }

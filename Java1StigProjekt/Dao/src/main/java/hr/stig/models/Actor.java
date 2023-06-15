@@ -16,6 +16,10 @@ public class Actor extends Person {
         return idActor;
     }
 
+    public Actor() {
+
+    }
+
     public Actor(int idActor, String firstName, String lastName) {
         this(firstName, lastName);
         this.idActor = idActor;

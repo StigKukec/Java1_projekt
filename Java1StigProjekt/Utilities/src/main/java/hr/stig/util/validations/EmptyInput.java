@@ -4,7 +4,6 @@
  */
 package hr.stig.util.validations;
 
-import com.microsoft.sqlserver.jdbc.StringUtils;
 import java.awt.Component;
 import java.util.List;
 import javax.swing.ImageIcon;
@@ -54,10 +53,10 @@ public class EmptyInput extends Component {
     public static void setEmpty(List<Component> inputs) {
         for (Component input : inputs) {
             if (input instanceof JTextArea ta) {
-                ta.setText(StringUtils.EMPTY);
+                ta.setText("");
             }
             if (input instanceof JTextField tf) {
-                tf.setText(StringUtils.EMPTY);
+                tf.setText("");
             }
             if (input instanceof JComboBox cb) {
 
@@ -68,10 +67,10 @@ public class EmptyInput extends Component {
         selectedEntity = 0;
         for (Component input : inputs) {
             if (input instanceof JTextArea ta) {
-                ta.setText(StringUtils.EMPTY);
+                ta.setText("");
             }
             if (input instanceof JTextField tf) {
-                tf.setText(StringUtils.EMPTY);
+                tf.setText("");
             }
             if (input instanceof JComboBox cb) {
 
@@ -82,10 +81,10 @@ public class EmptyInput extends Component {
     public static void setEmpty(List<Component> inputs, ImageIcon image) {
         for (Component input : inputs) {
             if (input instanceof JTextArea ta) {
-                ta.setText(StringUtils.EMPTY);
+                ta.setText("");
             }
             if (input instanceof JTextField tf) {
-                tf.setText(StringUtils.EMPTY);
+                tf.setText("");
             }
             if (input instanceof JComboBox cb) {
 
@@ -101,10 +100,10 @@ public class EmptyInput extends Component {
         selectedEntity = 0;
         for (Component input : inputs) {
             if (input instanceof JTextArea ta) {
-                ta.setText(StringUtils.EMPTY);
+                ta.setText("");
             }
             if (input instanceof JTextField tf) {
-                tf.setText(StringUtils.EMPTY);
+                tf.setText("");
             }
             if (input instanceof JComboBox cb) {
 
@@ -116,35 +115,4 @@ public class EmptyInput extends Component {
             }
         }
     }
-    /*
-    private boolean valueValid() {
-        for (Component component : movieLayout) {
-            switch (component) {
-                case JTextArea ta -> {
-                    if (ta.getText().trim().isEmpty()) {
-                        return false;
-                    }
-                }
-                case JTextField tf -> {
-                    if (tf.getText().trim().isEmpty()) {
-                        return false;
-                    }
-                }
-                case JComboBox cb -> {
-                    if (cb.getSelectedItem() == null) {
-                        return false;
-                    }
-                }
-                case JSpinner sp -> {
-                    if (sp.getValue() == null) {
-                        return false;
-                    }
-                }
-                case default -> {
-                }
-            }
-        }
-        return true;
-    }
-     */
 }

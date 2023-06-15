@@ -2,11 +2,12 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
-package hr.stig.util.validations;
+package hr.stig.authentication;
 
 import hr.stig.models.Account;
 import java.util.List;
 import javax.swing.JLabel;
+import static hr.stig.util.validations.PasswordHashing.checkPassword;
 
 /**
  *
@@ -25,7 +26,7 @@ public class Authentication {
         Authentication.username = username;
         for (Account acc : accounts) {
             userType = acc.isAdministrator();
-            if (acc.getUsername().equals(username) && acc.getPassword().equals(password)) {
+            if (acc.getUsername().equals(username) && checkPassword(password, acc.getPassword())) {
                 return true;
             }
         }

@@ -12,7 +12,7 @@ import javax.swing.table.AbstractTableModel;
  *
  * @author natio
  */
-public class allmoviesTableModel extends AbstractTableModel {
+public class AllmoviesTableModel extends AbstractTableModel {
 
     private static final String[] COLUMN = {"Title", "Genre", "Duration", "Movie description", "Release year", "Actors", "Directors", "Posters",};
 
@@ -23,7 +23,7 @@ public class allmoviesTableModel extends AbstractTableModel {
         fireTableDataChanged();
     }
 
-    public allmoviesTableModel(List<Movie> allmovies) {
+    public AllmoviesTableModel(List<Movie> allmovies) {
         this.allMovies = allmovies;
     }
 
@@ -44,7 +44,8 @@ public class allmoviesTableModel extends AbstractTableModel {
                 return allMovies.get(rowIndex).getTitle();
 
             case 1:
-                return allMovies.get(rowIndex).getGenre();
+                return allMovies.get(rowIndex).getGenres();
+                //return allMovies.get(rowIndex).getGenre();
 
             case 2:
                 return allMovies.get(rowIndex).getDuration();
